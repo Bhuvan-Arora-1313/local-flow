@@ -31,52 +31,100 @@ spectrum of your voice, and disappears when you're done.
 
 ## Requirements
 
-- **Apple Silicon Mac** (M1 or newer), macOS 12+
-- ~1.5 GB free disk (Python env + speech model)
-- **[Ollama](https://ollama.com)** — optional, for the jargon cleanup pass:
-  `ollama pull qwen3:8b`  (without it you still get transcription + dictionary fixes)
+- **Apple Silicon Mac** — M1 / M2 / M3 / M4. Intel Macs are **not supported** (the
+  speech model needs Apple's MLX / GPU).
+- **macOS 12 or newer.**
+- **~2 GB free disk** (Python environment + speech model).
+- That's it. `git` and `python3` come from Apple's Command Line Tools — the first time
+  you run `git`, macOS pops up an installer; click **Install**. (Or run
+  `xcode-select --install` yourself.)
+
+### The two models — and why you probably don't need Ollama
+
+| | what it does | needed? |
+|---|---|---|
+| **Parakeet** (~0.6 GB) | turns your speech into text, on the GPU | **yes** — but `./setup.sh` downloads it automatically, nothing to install by hand |
+| **Ollama + a small LLM** (~5 GB) | optional *cleanup pass*: fixes misheard jargon & names, removes "um / uh", tidies punctuation | **no** |
+
+Without Ollama you still get real dictation: transcription, punctuation, your
+`dictionary.txt` `=>` corrections, and acronym fixing (`l l m` → `LLM`). Ollama only
+adds the extra polish. LocalFlow auto-detects it — if it isn't running, that step is
+skipped silently.
+
+To enable the cleanup pass: install **[Ollama](https://ollama.com)** (a normal Mac
+app), then in a terminal:
+
+```sh
+ollama pull qwen3:8b
+```
+
+---
 
 ## Install
+
+**1. Get the code**
 
 ```sh
 git clone https://github.com/Bhuvan-Arora-1313/local-flow.git
 cd local-flow
-./setup.sh          # makes a Python 3.12 env, installs deps, downloads the model
 ```
 
-Uses `conda` if you have it, otherwise a `python3` venv.
-
-### Start it
+**2. Run setup** (one time, ~5 min, needs internet — afterwards it works offline)
 
 ```sh
-./run.sh            # foreground, logs in the terminal — use this the first time
+./setup.sh
 ```
 
-The menu bar shows **⏳** for ~1 second, then **🎙️** (Ready).
+This creates an isolated Python 3.12 environment (uses `conda` if you have it,
+otherwise a plain `python3` venv), installs the libraries, and downloads the
+Parakeet speech model.
 
-### 2. Grant permissions (macOS will prompt on first hotkey press)
+**3. (optional) Set up the cleanup LLM** — install Ollama, then `ollama pull qwen3:8b`
+(see the table above).
 
-Open **System Settings → Privacy & Security** and make sure `run.sh` / `Terminal`
-(foreground) or **LocalFlow** (installed app) is enabled in:
-
-- **Microphone** — to hear you
-- **Input Monitoring** — to detect the hotkey
-- **Accessibility** — to paste the text
-
-If no prompt appears, click **+** in each list and add
-`~/localflow/LocalFlow.app` (installed) or your terminal app.
-
-### 3. Use it
-
-- **Hold Right Option (⌥)**, speak, **release**. Text appears at the cursor.
-- Menu-bar icon states: 🎙️ ready · 🔴 recording · ✍️ transcribing · ⚠️ error.
-
-### 4. Install as an always-on app (optional)
+**4. Start it**
 
 ```sh
-cd ~/localflow
-./install.sh        # start at login + adds the `localflow` command
+./run.sh
 ```
+
+Use `./run.sh` for the first runs — it stays in the terminal and prints logs so you
+can see what's happening. The menu bar shows **⏳** for ~1 second, then **🎙️** (ready).
+
+**5. Grant three macOS permissions**
+
+macOS attaches permissions to *the program that launched LocalFlow*:
+
+- started with **`./run.sh`** → grant them to **Terminal** (or iTerm / whichever
+  terminal you used)
+- started with **`./install.sh`** (background app) → grant them to **LocalFlow**
+
+Open **System Settings → Privacy & Security** and enable that app under:
+
+| permission | why |
+|---|---|
+| **Microphone** | to hear you |
+| **Input Monitoring** | to detect the hotkey |
+| **Accessibility** | to type/paste the text |
+
+macOS usually prompts on first use. If it doesn't, click **+** in each list and add
+the app. **Quit and restart LocalFlow after granting.**
+
+**6. Use it**
+
+- **Hold Right Option (⌥)**, speak, **release**. The text appears at your cursor.
+- Menu-bar icon: 🎙️ ready · 🔴 recording · ✍️ transcribing · ⚠️ error.
+- While you talk, the waveform island shows near the bottom of the screen.
+
+**7. (optional) Run it always, in the background**
+
+```sh
+./install.sh        # starts at login + adds a `localflow` command
+```
+
+(The `LocalFlow.app` bundle is unsigned. If you ever launch it by double-clicking
+instead of these scripts, macOS Gatekeeper blocks it — right-click it → **Open** once
+to allow it.)
 
 ---
 
@@ -84,8 +132,8 @@ cd ~/localflow
 
 **Easiest stop:** click the **🎙️ menu-bar icon → Quit LocalFlow**.
 
-**From the terminal** (the `localflow` command is added by `./install.sh`; until then
-use `~/localflow/localflow`):
+**From the terminal** (`./install.sh` adds a global `localflow` command; until then
+run `./localflow` from the project folder):
 
 ```sh
 localflow start      # launch in the background (no terminal window kept open)
@@ -104,8 +152,8 @@ for the first run / debugging (it holds the terminal and prints logs live).
 
 ## Teaching it your jargon
 
-Edit **`~/localflow/dictionary.txt`**, then menu bar → **Reload dictionary**
-(no restart).
+Edit **`dictionary.txt`** (in the project folder), then menu bar → **Reload
+dictionary** (no restart).
 
 ```
 # just a term you want spelled right:
@@ -118,9 +166,9 @@ cube ctl => kubectl
 my sequel => MySQL
 ```
 
-Ships with ~1,800 terms across formal English, AI/ML, software, data, security,
+Ships with ~1,900 terms across formal English, AI/ML, software, data, security,
 cloud, product, finance, medicine, law, science/math, linguistics and philosophy,
-plus ~65 sounds-like corrections. Add your own people, product names and acronyms
+plus ~120 sounds-like corrections. Add your own people, product names and acronyms
 at the top.
 
 How the dictionary is used:
@@ -139,7 +187,7 @@ How the dictionary is used:
 
 ---
 
-## Configuration — `~/localflow/config.json`
+## Configuration — `config.json`
 
 | key | default | meaning |
 |---|---|---|
@@ -165,8 +213,9 @@ Parakeet's own punctuation + your `=>` corrections, at ~0.5 s latency.
   `mlx-community/whisper-large-v3-turbo` — the Whisper backend feeds your dictionary
   in as an `initial_prompt`. Slower (~2–4 s) but sometimes nails rare terms Parakeet
   misses. It downloads on first use.
-- **Cleanup model**: `qwen3:8b` is a good speed/quality balance. `qwen3:30b` or
-  `gemma4:26b` (both already on this machine) are sharper but add ~1–2 s.
+- **Cleanup model**: `qwen3:8b` is a good speed/quality balance. Any model you've
+  pulled with Ollama works — a bigger one (`qwen3:30b`, `gemma2:27b`) is sharper but
+  adds ~1–2 s. Set `ollama_model` in `config.json` to match.
 
 ---
 
@@ -206,11 +255,13 @@ HUD for a few seconds.
 
 | symptom | fix |
 |---|---|
-| Nothing happens on hotkey | grant **Input Monitoring** + **Accessibility**, then restart LocalFlow. Log shows `This process is not trusted!` until you do. |
-| Records but transcript is empty | `./mic_test.py` — check `peak level`. If ~0, wrong input device or **Microphone** denied. |
-| Text doesn't paste (but menu → *Copy last transcript* works) | **Accessibility** not granted, or the target app blocks synthetic ⌘V — set `auto_paste:false` and paste manually. |
-| First dictation after a break is slow | Ollama unloaded the model; it reloads in ~2 s. Raise Ollama's `keep_alive` or set `cleanup_enabled:false`. |
-| Jargon still wrong | add it to `dictionary.txt` (use a `=>` line), Reload dictionary. Consider the Whisper backend. |
+| Nothing happens on hotkey | grant **Input Monitoring** + **Accessibility** to the launching app (Terminal, or LocalFlow), then restart it. The log shows `This process is not trusted!` until you do. |
+| Records but transcript is empty | run `"$(cat .python-path)" mic_test.py` — check the `peak level`. If ~0: wrong input device, or **Microphone** denied. |
+| Text doesn't paste (but menu → *Copy last transcript* works) | **Accessibility** not granted, or the target app blocks synthetic ⌘V — set `"auto_paste": false` and paste manually. |
+| Cleanup pass never runs | Ollama isn't installed / running, or the model in `ollama_model` isn't pulled. `ollama list` to check. It's optional — dictation still works without it. |
+| First dictation after a break is slow | Ollama unloaded the model; it reloads in ~2 s. Or set `"cleanup_enabled": false`. |
+| Jargon still wrong | add it to `dictionary.txt` (use a `=>` line), menu → Reload dictionary. |
 | Wrong hotkey / conflicts | change `hotkey` in `config.json`, restart. |
+| `setup.sh` fails on `pip install` | your `python3` is probably 3.13+ with no prebuilt wheels — install [Miniconda](https://docs.conda.io/en/latest/miniconda.html) and re-run `./setup.sh` (it'll use conda). |
 
-Live logs: `tail -f ~/localflow/localflow.log`
+Live logs: `tail -f localflow.log` (or `localflow logs`).
