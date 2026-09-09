@@ -32,7 +32,7 @@ sed -e "s#__LOCALFLOW_HOME__#${HERE}#g" "${HERE}/com.localflow.dictation.plist" 
 
 launchctl bootout "${DOMAIN}/com.localflow.dictation" 2>/dev/null || true
 launchctl unload "${PLIST}" 2>/dev/null || true
-pkill -f "${HERE}/flow.py" 2>/dev/null || true
+pkill -f "${HERE}/LocalFlow.app/Contents/MacOS/LocalFlow|${HERE}/flow.py" 2>/dev/null || true
 sleep 1
 launchctl bootstrap "${DOMAIN}" "${PLIST}"
 launchctl enable "${DOMAIN}/com.localflow.dictation" 2>/dev/null || true

@@ -1,13 +1,16 @@
 #!/bin/zsh
 # LocalFlow control:  localflow {start|stop|restart|status|logs|install|uninstall}
 HERE="${0:A:h}"                       # resolves symlinks -> real project dir
-FLOW="${HERE}/flow.py"
 LOG="${HERE}/localflow.log"
 PLIST="${HOME}/Library/LaunchAgents/com.localflow.dictation.plist"
 LABEL="com.localflow.dictation"
 
-is_running() { pgrep -f "${FLOW}" >/dev/null 2>&1; }
-running_pids() { pgrep -f "${FLOW}" | tr '\n' ' '; }
+# matches both ways LocalFlow can run: the compiled bundle launcher, or
+# `python flow.py` (run.sh / dev).
+PAT="${HERE}/LocalFlow.app/Contents/MacOS/LocalFlow|${HERE}/flow.py"
+
+is_running() { pgrep -f "${PAT}" >/dev/null 2>&1; }
+running_pids() { pgrep -f "${PAT}" | tr '\n' ' '; }
 installed()  { [[ -f "$PLIST" ]]; }
 
 py() {
@@ -50,9 +53,9 @@ start() {
 stop() {
   installed && { launchctl bootout "gui/$(id -u)/${LABEL}" 2>/dev/null \
                  || launchctl unload "$PLIST" 2>/dev/null; }
-  pkill -f "${FLOW}" 2>/dev/null
+  pkill -f "${PAT}" 2>/dev/null
   sleep 1
-  pkill -9 -f "${FLOW}" 2>/dev/null
+  pkill -9 -f "${PAT}" 2>/dev/null
   is_running && echo "Still running (pid $(running_pids))." || echo "LocalFlow stopped."
 }
 

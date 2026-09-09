@@ -70,13 +70,15 @@ cat <<EOF
 Done.  Interpreter: $PYBIN
 
 Next:
-  1. (optional) jargon cleanup pass:  install Ollama from https://ollama.com
-       then:  ollama pull qwen3:8b
+  1. STRONGLY RECOMMENDED — the LLM cleanup pass (turns rough speech-to-text
+     into clean text). Install Ollama from https://ollama.com, then:
+         ollama pull qwen3:8b
   2. Start it:   ./run.sh
-  3. Grant permissions when macOS asks (or add the launching app -- Terminal, or
-     LocalFlow -- in System Settings > Privacy & Security):
+  3. Grant permissions when macOS asks (or add "LocalFlow" / your terminal in
+     System Settings > Privacy & Security):
        Microphone · Input Monitoring · Accessibility
-  4. Hold Right Option, speak, release.
+     …then quit and reopen it.
+  4. Hold Left Option, speak, release.  (double-tap = lock hands-free)
 
-Always-on / background use:  ./install.sh
+Always-on / background use + a global 'localflow' command:  ./install.sh
 EOF
