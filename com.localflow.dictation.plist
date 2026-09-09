@@ -10,7 +10,7 @@
          session so its menu-bar item shows. -->
     <key>ProgramArguments</key>
     <array>
-        <string>__LOCALFLOW_HOME__/LocalFlow.app/Contents/MacOS/LocalFlow</string>
+        <string>__APP_EXE__</string>
     </array>
 
     <key>RunAtLoad</key>

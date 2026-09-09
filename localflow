@@ -5,9 +5,12 @@ LOG="${HERE}/localflow.log"
 PLIST="${HOME}/Library/LaunchAgents/com.localflow.dictation.plist"
 LABEL="com.localflow.dictation"
 
-# matches both ways LocalFlow can run: the compiled bundle launcher, or
-# `python flow.py` (run.sh / dev).
-PAT="${HERE}/LocalFlow.app/Contents/MacOS/LocalFlow|${HERE}/flow.py"
+# canonical clickable app is in /Applications once ./install.sh has run
+APP="/Applications/LocalFlow.app"; [[ -d "$APP" ]] || APP="${HERE}/LocalFlow.app"
+
+# matches every way LocalFlow can run: /Applications bundle, project bundle,
+# or `python flow.py` (run.sh / dev).
+PAT="LocalFlow.app/Contents/MacOS/LocalFlow|${HERE}/flow.py"
 
 is_running() { pgrep -f "${PAT}" >/dev/null 2>&1; }
 running_pids() { pgrep -f "${PAT}" | tr '\n' ' '; }
@@ -37,7 +40,7 @@ start() {
     launchctl kickstart -k "$D/${LABEL}" 2>/dev/null # (re)start now
   else
     # Launch the .app through LaunchServices so the menu-bar item registers.
-    open "${HERE}/LocalFlow.app"
+    open "$APP"
   fi
 
   local i
