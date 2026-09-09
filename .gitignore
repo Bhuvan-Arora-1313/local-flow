@@ -3,6 +3,7 @@ __pycache__/
 .python-path
 .flow.lock
 localflow.log
+LocalFlow.app/Contents/Resources/localflow_home
 .venv/
 .DS_Store
 *.aiff

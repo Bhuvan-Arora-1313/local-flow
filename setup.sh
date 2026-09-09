@@ -51,6 +51,12 @@ echo "• installing dependencies (a few minutes; ~250 MB download)…"
 "$PYBIN" -m pip install --quiet -r requirements.txt
 
 echo "$PYBIN" > "$HERE/.python-path"
+
+echo "• building the app launcher…"
+clang -O2 -o "$HERE/LocalFlow.app/Contents/MacOS/LocalFlow" "$HERE/launcher.c" \
+  || echo "  (clang failed — the .app still works via ./run.sh / localflow)"
+mkdir -p "$HERE/LocalFlow.app/Contents/Resources"
+print -r -- "$HERE" > "$HERE/LocalFlow.app/Contents/Resources/localflow_home"
 chmod +x "$HERE"/*.sh "$HERE/localflow" \
          "$HERE/LocalFlow.app/Contents/MacOS/LocalFlow" 2>/dev/null || true
 
