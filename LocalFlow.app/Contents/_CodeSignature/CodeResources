@@ -15,15 +15,6 @@
 	</dict>
 	<key>files2</key>
 	<dict>
-		<key>MacOS/.gitkeep</key>
-		<dict>
-			<key>cdhash</key>
-			<data>
-			FqPVENH/t834YSRdHX9XnIH6B9c=
-			</data>
-			<key>requirement</key>
-			<string>cdhash H"16a3d510d1ffb7cdf861245d1d7f579c81fa07d7"</string>
-		</dict>
 		<key>Resources/AppIcon.icns</key>
 		<dict>
 			<key>hash2</key>

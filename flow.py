@@ -249,6 +249,17 @@ def run_app(app: App):
     NSApp.finishLaunching()
     print(f"[flow] setActivationPolicy ok={ok} policy={NSApp.activationPolicy()}")
 
+    # Ask for Accessibility (pynput's hotkey + paste need it). The prompting
+    # variant puts LocalFlow into System Settings' Accessibility list and shows
+    # the standard "Open System Settings" dialog on first run.
+    try:
+        import HIServices
+        opts = {"AXTrustedCheckOptionPrompt": True}
+        trusted = HIServices.AXIsProcessTrustedWithOptions(opts)
+        print(f"[flow] AXIsProcessTrusted = {trusted}")
+    except Exception as e:
+        print(f"[flow] AX prompt failed: {e}")
+
     class Target(AppKit.NSObject):
         def toggleCleanup_(self, sender):
             app.cleanup_on = not app.cleanup_on
