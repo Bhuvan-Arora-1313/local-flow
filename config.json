@@ -3,22 +3,20 @@
   "hotkey_note": "Options: alt_l/alt_r (Option), cmd_r, ctrl_r, shift_r, f5..f19. Set from Settings.",
   "mode": "hold_or_lock",
   "mode_note": "hold_or_lock = hold to talk, double-tap to lock hands-free (tap again to stop). Also: push_to_talk, toggle.",
-
-  "asr_model": "mlx-community/parakeet-tdt-0.6b-v3",
+  "asr_model": "mlx-community/whisper-large-v3-turbo",
   "asr_language": "auto",
   "asr_language_note": "Only used by the Whisper speech model. 'auto' = detect; 'hi' for Hindi/Hinglish. Parakeet ignores this.",
   "sample_rate": 16000,
-
   "learn_words": false,
   "learn_words_note": "When true, watches your typing and adds unusual words (not English, seen 2+ times) to learned.txt, which feeds the glossary.",
-
   "cleanup_enabled": true,
+  "smart_formatting": true,
+  "smart_formatting_note": "When true (and AI cleanup on), spoken lists/enumerations become numbered or bulleted lists with line breaks.",
   "ollama_url": "http://localhost:11434",
   "ollama_model": "qwen3:8b",
   "cleanup_timeout_seconds": 30,
   "max_glossary_terms": 240,
   "max_glossary_terms_note": "How many dictionary terms to hand the cleanup LLM per utterance (proper nouns / acronyms / product names are prioritised). The full dictionary is still used for literal '=>' corrections. Raising this improves rare-term recall but slows cleanup.",
-
   "min_record_seconds": 0.35,
   "auto_paste": true,
   "trailing_space": true,

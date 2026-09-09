@@ -125,7 +125,7 @@ class SettingsWindow:
 
     # ---------- build ----------
     def _build(self):
-        W, H = 520, 864
+        W, H = 520, 892
         style = (AppKit.NSWindowStyleMaskTitled | AppKit.NSWindowStyleMaskClosable)
         win = AppKit.NSWindow.alloc().initWithContentRect_styleMask_backing_defer_(
             NSMakeRect(0, 0, W, H), style, AppKit.NSBackingStoreBuffered, False)
@@ -203,6 +203,7 @@ class SettingsWindow:
         y -= 26
 
         check("cleanup_enabled", "AI cleanup — fix jargon, drop “um / uh”")
+        check("smart_formatting", "Smart formatting — spoken lists become bullets / numbers")
         check("island", "Show the waveform island while dictating")
         check("sounds", "Play start / done sounds")
         check("auto_paste", "Paste automatically (off = just copy)")
@@ -325,8 +326,8 @@ class SettingsWindow:
 
     def _save(self):
         cfg = load_cfg()
-        for key in ("cleanup_enabled", "island", "sounds", "auto_paste",
-                    "trailing_space", "notify", "learn_words"):
+        for key in ("cleanup_enabled", "smart_formatting", "island", "sounds",
+                    "auto_paste", "trailing_space", "notify", "learn_words"):
             cfg[key] = bool(self.controls[key].state())
         cfg["hotkey"] = dict(HOTKEYS).get(self.controls["hotkey"].titleOfSelectedItem(), "alt_l")
         cfg["mode"] = dict(MODES).get(self.controls["mode"].titleOfSelectedItem(), "hold_or_lock")

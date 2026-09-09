@@ -29,8 +29,11 @@ glued to a word ("3l llms", "5 hundred") write it naturally ("three LLMs", "500"
 - Fix punctuation, capitalisation, sentence boundaries, and obvious homophones ("their/there", "to/two/too").
 - Remove filler words and false starts: "um", "uh", "you know", "sort of", "like" (as filler), stutters, \
 repeated words, and immediate self-corrections ("send it to Bob, no wait, to Alice" -> "send it to Alice").
-- Expand spoken formatting commands: "new line" / "new paragraph" -> actual line breaks; "period", \
-"comma", "question mark", "open quote", "bullet point" -> the punctuation/markup.
+- Expand spoken formatting commands: "new line" / "next line" -> a line break; "new paragraph" -> a \
+blank line; "period / full stop", "comma", "question mark", "exclamation mark", "colon", "semicolon", \
+"dash", "open/close quote", "open/close paren" -> that punctuation; "bullet point" / "next point" -> a \
+new list item.
+{LIST_RULES}
 - Keep the person's own wording, tone, register and meaning. Do NOT summarise, paraphrase, answer a \
 question in the text, translate, censor, or add any content or commentary.
 - If the speaker mixes languages (e.g. Hinglish - Hindi + English), keep every word in the language \
@@ -38,6 +41,31 @@ and script they used (romanised Hindi stays romanised); only fix obvious spellin
 - If the transcript is already clean, return it unchanged.
 
 Return ONLY the cleaned text - no preamble, no quotes, no notes."""
+
+LIST_RULES_ON = """- LISTS - this matters, do it: when the speaker enumerates items, output them as a real \
+list, each item on its OWN line.
+    * Ordinal words ("first ... second ... third", "one ... two ... three", "point one ... point \
+two", "next ...") -> numbered list "1. ", "2. ", "3. " - and DROP the spoken ordinal word.
+    * A lead-in such as "a few things", "the steps are", "here is what we need", "reasons", "to do", \
+then several parallel items -> bullet list, each line starting "- ".
+    * 3+ short parallel clauses that clearly read as a list -> bullet list.
+  Keep each item's own words. Capitalise each item. Put the lead-in (if any) as its own line ending \
+with ":" then a blank line, then the list.
+  Do NOT list-ify ordinary prose, a single item, or a normal sentence that just has commas.
+
+EXAMPLE
+RAW_TRANSCRIPT:
+so there are three things we need to do first buy the groceries second call the bank and third fix the car
+CLEANED:
+There are three things we need to do:
+
+1. Buy the groceries
+2. Call the bank
+3. Fix the car
+END EXAMPLE"""
+
+LIST_RULES_OFF = """- Do not convert anything into a bulleted or numbered list; keep the text as flowing prose \
+(still honour an explicit spoken "new line" / "bullet point")."""
 
 
 def _strip_think(s: str) -> str:
@@ -96,19 +124,22 @@ class Cleaner:
         except Exception:
             pass
 
-    def clean(self, raw: str, glossary: list[str], _timeout: int | None = None) -> str:
+    def clean(self, raw: str, glossary: list[str], _timeout: int | None = None,
+              smart_format: bool = True) -> str:
         raw = raw.strip()
         if not raw:
             return raw
         gl = select_glossary(glossary, self.max_glossary_terms)
         gloss = ", ".join(gl) if gl else "(none provided)"
+        system = SYSTEM_PROMPT.replace(
+            "{LIST_RULES}", LIST_RULES_ON if smart_format else LIST_RULES_OFF)
         # Stable prefix (glossary) first, variable part (transcript) last -> Ollama
         # reuses the KV cache across dictations.
         user = f"GLOSSARY:\n{gloss}\n\nRAW_TRANSCRIPT:\n{raw}\n\n/no_think"
         payload = {
             "model": self.model,
             "prompt": user,
-            "system": SYSTEM_PROMPT,
+            "system": system,
             "stream": False,
             "think": False,
             "keep_alive": "30m",
@@ -125,6 +156,6 @@ class Cleaner:
             return raw
         out = _unwrap_quotes(_strip_think(out))
         # Guard against a model that ignored instructions and ballooned the text.
-        if not out or len(out) > max(400, len(raw) * 4):
+        if not out or len(out) > max(600, len(raw) * 5):
             return raw
         return out

@@ -154,14 +154,22 @@ class App:
 
     # ---------- model ----------
     def _load_model(self):
-        try:
-            self.asr = Transcriber(CFG["asr_model"], CFG.get("sample_rate", 16000),
-                                   CFG.get("asr_language", "auto"))
-            self.rec.sample_rate = self.asr.sample_rate
-            self.state = "idle"
-        except Exception as e:
-            print(f"[flow] model load failed: {e}")
-            self.state = "error"
+        for attempt in (1, 2):
+            try:
+                self.asr = Transcriber(CFG["asr_model"], CFG.get("sample_rate", 16000),
+                                       CFG.get("asr_language", "auto"))
+                self.rec.sample_rate = self.asr.sample_rate
+                self.state = "idle"
+                return
+            except Exception as e:
+                # offline env is set once Parakeet is cached; if the user switched
+                # to a model that isn't downloaded yet, retry with network on.
+                if attempt == 1 and os.environ.pop("HF_HUB_OFFLINE", None):
+                    os.environ.pop("TRANSFORMERS_OFFLINE", None)
+                    print("[flow] model not cached — retrying download with network…")
+                    continue
+                print(f"[flow] model load failed: {e}")
+                self.state = "error"
 
     # ---------- hotkey ----------
     def _on_press(self, key):
@@ -260,7 +268,9 @@ class App:
                 text = dictmod.apply_literal_corrections(raw, self.corrections)
                 text = dictmod.normalize_acronyms(text, self.acronyms)
                 if self.cleanup_on and self.cleaner.available():
-                    text = self.cleaner.clean(text, self.terms)
+                    text = self.cleaner.clean(
+                        text, self.terms,
+                        smart_format=CFG.get("smart_formatting", True))
                 elif text:
                     text = text[0].upper() + text[1:]
                 t2 = time.time()
