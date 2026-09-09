@@ -6,6 +6,5 @@ numpy
 pynput
 pyperclip
 requests
-rumps
 pyobjc-framework-Cocoa
 pyobjc-framework-Quartz

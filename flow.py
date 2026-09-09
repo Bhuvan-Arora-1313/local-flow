@@ -3,6 +3,9 @@
 
 Hold the hotkey, talk, release. Audio -> Parakeet (MLX, on-GPU) -> local LLM
 cleanup (Ollama) -> text is pasted at your cursor. Nothing leaves the machine.
+
+The menu-bar item is built directly with AppKit (no rumps) so it registers
+reliably however the app is launched.
 """
 import os
 import sys
@@ -23,14 +26,13 @@ def load_config():
 CFG = load_config()
 
 import numpy as np  # noqa: E402
-import rumps  # noqa: E402
 from pynput import keyboard  # noqa: E402
 
 from recorder import Recorder  # noqa: E402
 from asr import Transcriber  # noqa: E402
 try:
     from island import Island  # noqa: E402
-except Exception as _e:  # AppKit missing / headless
+except Exception as _e:
     Island = None
     print(f"[flow] island unavailable: {_e}")
 from cleanup import Cleaner  # noqa: E402
@@ -46,11 +48,14 @@ SOUNDS = {
 }
 
 
-def notify(title: str, subtitle: str, msg: str):
+def notify(title: str, msg: str):
     if not CFG.get("notify", True):
         return
     try:
-        rumps.notification(title, subtitle, msg)
+        subprocess.Popen(
+            ["osascript", "-e", f'display notification "{msg}" with title "{title}"'],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        )
     except Exception:
         pass
 
@@ -75,12 +80,14 @@ def resolve_key(name: str):
     raise ValueError(f"Unknown hotkey in config: {name!r}")
 
 
-class LocalFlow(rumps.App):
+class App:
+    """All the dictation logic; UI-framework-agnostic."""
+
     def __init__(self):
-        super().__init__("LocalFlow", title="LF·", quit_button=None)
         self.state = "loading"          # loading | idle | rec | work | error
         self.asr = None
         self.last_text = ""
+        self.cleanup_on = CFG.get("cleanup_enabled", True)
         self._jobs: queue.Queue = queue.Queue()
         self._hotkey = resolve_key(CFG["hotkey"])
         self._hotkey_down = False
@@ -104,35 +111,16 @@ class LocalFlow(rumps.App):
             except Exception as e:
                 print(f"[flow] island init failed: {e}")
 
-        self.item_status = rumps.MenuItem("Loading model…")
-        self.item_cleanup = rumps.MenuItem("AI cleanup", callback=self.toggle_cleanup)
-        self.item_cleanup.state = CFG.get("cleanup_enabled", True)
-        self.item_last = rumps.MenuItem("Last: —")
-        self.menu = [
-            self.item_status,
-            None,
-            self.item_cleanup,
-            rumps.MenuItem("Reload dictionary", callback=self.reload_dict),
-            rumps.MenuItem("Copy last transcript", callback=self.copy_last),
-            self.item_last,
-            None,
-            rumps.MenuItem("Quit LocalFlow", callback=rumps.quit_application),
-        ]
-
+    def start_background(self):
         threading.Thread(target=self._load_model, daemon=True).start()
         threading.Thread(target=self._worker, daemon=True).start()
-        if self.item_cleanup.state:
+        if self.cleanup_on:
             threading.Thread(
                 target=lambda: self.cleaner.available() and self.cleaner.warm(self.terms),
                 daemon=True,
             ).start()
         self._listener = keyboard.Listener(on_press=self._on_press, on_release=self._on_release)
         self._listener.start()
-        self._status_timer = rumps.Timer(self._tick, 0.25)
-        self._status_timer.start()
-        if self.island is not None:
-            self._island_timer = rumps.Timer(self._island_tick, 1.0 / 30.0)
-            self._island_timer.start()
 
     # ---------- model ----------
     def _load_model(self):
@@ -153,7 +141,7 @@ class LocalFlow(rumps.App):
                 return
             self._hotkey_down = True
             self._begin()
-        else:  # toggle
+        else:
             self._toggle_on = not self._toggle_on
             self._begin() if self._toggle_on else self._end()
 
@@ -198,7 +186,7 @@ class LocalFlow(rumps.App):
                 t1 = time.time()
                 text = dictmod.apply_literal_corrections(raw, self.corrections)
                 text = dictmod.normalize_acronyms(text, self.acronyms)
-                if self.item_cleanup.state and self.cleaner.available():
+                if self.cleanup_on and self.cleaner.available():
                     text = self.cleaner.clean(text, self.terms)
                 elif text:
                     text = text[0].upper() + text[1:]
@@ -223,75 +211,141 @@ class LocalFlow(rumps.App):
             finally:
                 self.state = "idle"
 
-    # ---------- menu callbacks ----------
-    def toggle_cleanup(self, sender):
-        sender.state = not sender.state
-
-    def reload_dict(self, _):
+    # ---------- menu actions ----------
+    def reload_dict(self):
         self.terms, self.corrections = dictmod.load(DICT_PATH)
         self.acronyms = dictmod.acronym_set(self.terms)
-        notify("LocalFlow", "Dictionary reloaded", f"{len(self.terms)} terms")
+        notify("LocalFlow", f"Dictionary reloaded — {len(self.terms)} terms")
 
-    def copy_last(self, _):
+    def copy_last(self):
         if self.last_text:
             subprocess.run(["pbcopy"], input=self.last_text.encode(), check=False)
 
-    # ---------- island (bottom-screen HUD) ----------
-    def _island_tick(self, _):
-        try:
-            self.island.set_state(self.state)
-            self.island.tick()
-        except Exception:
-            pass
+    # ---------- text for the UI ----------
+    def status_glyph(self):
+        return {"loading": "LF·", "idle": "LF", "rec": "● REC",
+                "work": "LF…", "error": "LF!"}.get(self.state, "LF")
 
-    # ---------- status tick ----------
-    def _tick(self, _):
-        # Plain-text glyphs: emoji status-bar titles can render zero-width on some
-        # macOS builds, making the item look missing.
-        icons = {"loading": "LF·", "idle": "LF", "rec": "● REC", "work": "LF…", "error": "LF !"}
-        labels = {
+    def status_label(self):
+        return {
             "loading": "Loading model…",
             "idle": "Ready — hold %s to talk" % CFG["hotkey"],
             "rec": "Recording…",
             "work": "Transcribing…",
-            "error": "Model error — see logs",
-        }
-        self.title = icons.get(self.state, "LF")
-        self.item_status.title = labels.get(self.state, "")
-        if self.last_text:
-            preview = self.last_text.strip()
-            self.item_last.title = "Last: " + (preview[:40] + "…" if len(preview) > 40 else preview)
+            "error": "Model error — see localflow.log",
+        }.get(self.state, "")
+
+
+# ======================================================================
+#  AppKit menu-bar shell
+# ======================================================================
+def run_app(app: App):
+    import AppKit
+    from Foundation import NSTimer
+
+    NSApp = AppKit.NSApplication.sharedApplication()
+    # accessory = menu-bar app, no Dock icon
+    NSApp.setActivationPolicy_(AppKit.NSApplicationActivationPolicyAccessory)
+
+    class Target(AppKit.NSObject):
+        def toggleCleanup_(self, sender):
+            app.cleanup_on = not app.cleanup_on
+            sender.setState_(1 if app.cleanup_on else 0)
+
+        def reloadDict_(self, sender):
+            app.reload_dict()
+
+        def copyLast_(self, sender):
+            app.copy_last()
+
+        def quitApp_(self, sender):
+            AppKit.NSApp().terminate_(None)
+
+    tgt = Target.alloc().init()
+
+    menu = AppKit.NSMenu.alloc().init()
+
+    def add(title, sel=None, key=""):
+        it = AppKit.NSMenuItem.alloc().initWithTitle_action_keyEquivalent_(title, sel, key)
+        if sel is not None:
+            it.setTarget_(tgt)
+        else:
+            it.setEnabled_(False)
+        menu.addItem_(it)
+        return it
+
+    mi_status = add("Loading model…")
+    mi_last = add("Last: —")
+    menu.addItem_(AppKit.NSMenuItem.separatorItem())
+    mi_cleanup = add("AI cleanup", b"toggleCleanup:")
+    mi_cleanup.setState_(1 if app.cleanup_on else 0)
+    add("Reload dictionary", b"reloadDict:")
+    add("Copy last transcript", b"copyLast:")
+    menu.addItem_(AppKit.NSMenuItem.separatorItem())
+    add("Quit LocalFlow", b"quitApp:", "q")
+
+    status_item = AppKit.NSStatusBar.systemStatusBar().statusItemWithLength_(-1.0)
+    status_item.button().setTitle_("LF·")
+    status_item.setMenu_(menu)
+    # keep strong refs so nothing is GC'd out of the menu bar
+    app._ui = (NSApp, tgt, menu, status_item, mi_status, mi_last, mi_cleanup)
+
+    app.start_background()
+
+    def status_tick():
+        try:
+            status_item.button().setTitle_(app.status_glyph())
+            mi_status.setTitle_(app.status_label())
+            if app.last_text:
+                p = app.last_text.strip()
+                mi_last.setTitle_("Last: " + (p[:40] + "…" if len(p) > 40 else p))
+        except Exception as e:
+            print(f"[flow] status_tick: {e}")
+
+    def island_tick():
+        if app.island is None:
+            return
+        try:
+            app.island.set_state(app.state)
+            app.island.tick()
+        except Exception:
+            pass
+
+    NSTimer.scheduledTimerWithTimeInterval_repeats_block_(0.25, True, lambda t: status_tick())
+    if app.island is not None:
+        NSTimer.scheduledTimerWithTimeInterval_repeats_block_(1 / 30.0, True, lambda t: island_tick())
+
+    print("[flow] menu-bar item created; entering run loop")
+    NSApp.run()
+
+
+def _selftest():
+    import soundfile as sf
+    wav = sys.argv[sys.argv.index("--selftest") + 1]
+    data, sr = sf.read(wav, dtype="float32")
+    if data.ndim > 1:
+        data = data.mean(axis=1)
+    asr = Transcriber(CFG["asr_model"])
+    if sr != asr.sample_rate:
+        import librosa
+        data = librosa.resample(data, orig_sr=sr, target_sr=asr.sample_rate)
+    terms, corr = dictmod.load(DICT_PATH)
+    raw = asr.transcribe(data, prompt=", ".join(terms))
+    fixed = dictmod.apply_literal_corrections(raw, corr)
+    fixed = dictmod.normalize_acronyms(fixed, dictmod.acronym_set(terms))
+    cl = Cleaner(CFG["ollama_url"], CFG["ollama_model"], CFG["cleanup_timeout_seconds"],
+                 CFG.get("max_glossary_terms", 240))
+    final = cl.clean(fixed, terms) if cl.available() else fixed
+    print("RAW  :", raw)
+    print("FINAL:", final)
 
 
 if __name__ == "__main__":
     if "--selftest" in sys.argv:
-        # Headless pipeline test on a wav file: python flow.py --selftest file.wav
-        import soundfile as sf
-        wav = sys.argv[sys.argv.index("--selftest") + 1]
-        data, sr = sf.read(wav, dtype="float32")
-        if data.ndim > 1:
-            data = data.mean(axis=1)
-        asr = Transcriber(CFG["asr_model"])
-        if sr != asr.sample_rate:
-            import librosa
-            data = librosa.resample(data, orig_sr=sr, target_sr=asr.sample_rate)
-        terms, corr = dictmod.load(DICT_PATH)
-        raw = asr.transcribe(data, prompt=", ".join(terms))
-        fixed = dictmod.apply_literal_corrections(raw, corr)
-        fixed = dictmod.normalize_acronyms(fixed, dictmod.acronym_set(terms))
-        cl = Cleaner(CFG["ollama_url"], CFG["ollama_model"], CFG["cleanup_timeout_seconds"],
-                     CFG.get("max_glossary_terms", 240))
-        if cl.available():
-            tw = time.time(); cl.warm(terms); print(f"(warm {time.time()-tw:.1f}s)")
-            tc = time.time(); final = cl.clean(fixed, terms); print(f"(clean {time.time()-tc:.1f}s)")
-        else:
-            final = fixed
-        print("RAW  :", raw)
-        print("FINAL:", final)
+        _selftest()
         sys.exit(0)
 
-    # Single-instance lock: a second launch just exits, so you can never end up
-    # with two menu-bar icons / two hotkey listeners.
+    # Single-instance lock: a second launch just exits.
     import fcntl
     _lock = open(os.path.join(BASE, ".flow.lock"), "w")
     try:
@@ -302,4 +356,4 @@ if __name__ == "__main__":
     _lock.write(str(os.getpid()))
     _lock.flush()
 
-    LocalFlow().run()
+    run_app(App())
