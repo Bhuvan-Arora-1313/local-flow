@@ -5,15 +5,13 @@ HERE="${0:A:h}"
 
 [[ -f "${HERE}/.python-path" ]] || { echo "Run ./setup.sh first (no .python-path)."; exit 1; }
 
-# Compiled launcher (built by setup.sh). Fall back to building it here.
+chmod +x "${HERE}"/*.sh "${HERE}/localflow" 2>/dev/null || true
+
+# Build the native launcher (embeds Python) if it isn't there yet.
 LAUNCH="${HERE}/LocalFlow.app/Contents/MacOS/LocalFlow"
 if ! file "$LAUNCH" 2>/dev/null | grep -q "Mach-O"; then
-  clang -O2 -o "$LAUNCH" "${HERE}/launcher.c" || { echo "could not build launcher"; exit 1; }
+  "${HERE}/build-launcher.sh" || { echo "could not build launcher"; exit 1; }
 fi
-chmod +x "$LAUNCH" "${HERE}"/*.sh "${HERE}/localflow" 2>/dev/null || true
-
-mkdir -p "${HERE}/LocalFlow.app/Contents/Resources"
-print -r -- "${HERE}" > "${HERE}/LocalFlow.app/Contents/Resources/localflow_home"
 
 # Make `localflow` runnable from anywhere: symlink into a PATH dir, else add an alias.
 if LINKDIR=$(for d in "$HOME/bin" "$HOME/.local/bin" /usr/local/bin; do

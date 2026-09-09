@@ -245,7 +245,9 @@ def run_app(app: App):
 
     NSApp = AppKit.NSApplication.sharedApplication()
     # accessory = menu-bar app, no Dock icon
-    NSApp.setActivationPolicy_(AppKit.NSApplicationActivationPolicyAccessory)
+    ok = NSApp.setActivationPolicy_(AppKit.NSApplicationActivationPolicyAccessory)
+    NSApp.finishLaunching()
+    print(f"[flow] setActivationPolicy ok={ok} policy={NSApp.activationPolicy()}")
 
     class Target(AppKit.NSObject):
         def toggleCleanup_(self, sender):
@@ -284,11 +286,26 @@ def run_app(app: App):
     menu.addItem_(AppKit.NSMenuItem.separatorItem())
     add("Quit LocalFlow", b"quitApp:", "q")
 
-    status_item = AppKit.NSStatusBar.systemStatusBar().statusItemWithLength_(-1.0)
-    status_item.button().setTitle_("LF·")
+    bar = AppKit.NSStatusBar.systemStatusBar()
+    status_item = bar.statusItemWithLength_(AppKit.NSVariableStatusItemLength)
+    btn = status_item.button()
+    if btn is not None:
+        btn.setTitle_("LF·")
+        btn.setImagePosition_(AppKit.NSImageLeft)
+    else:
+        try:
+            status_item.setTitle_("LF·")
+        except Exception:
+            pass
+    try:
+        status_item.setVisible_(True)
+    except Exception:
+        pass
     status_item.setMenu_(menu)
     # keep strong refs so nothing is GC'd out of the menu bar
     app._ui = (NSApp, tgt, menu, status_item, mi_status, mi_last, mi_cleanup)
+    print(f"[flow] statusBar={bar!r} item={status_item!r} button={btn!r} "
+          f"visible={getattr(status_item, 'isVisible', lambda: '?')()}")
 
     app.start_background()
 
