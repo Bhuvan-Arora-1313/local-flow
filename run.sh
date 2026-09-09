@@ -7,9 +7,15 @@ cd "$HERE" || exit 1
 
 PYTHON="$(cat "$HERE/.python-path" 2>/dev/null)"
 [[ -x "$PYTHON" ]] || PYTHON="${HOME}/miniconda3/envs/flow/bin/python"
-[[ -x "$PYTHON" ]] || PYTHON="python3"
+[[ -x "$PYTHON" ]] || PYTHON="$(command -v python3)"
 
-if [[ ! -x "$PYTHON" && "$PYTHON" != "python3" ]]; then
+if [[ ! -x "$PYTHON" ]]; then
   echo "No Python env found. Run ./setup.sh first."; exit 1
 fi
-exec "$PYTHON" flow.py
+
+# skip the network check once the model is cached
+if ls "${HOME}/.cache/huggingface/hub/models--mlx-community--parakeet-tdt-0.6b-v3/snapshots/"*/config.json >/dev/null 2>&1; then
+  export HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1
+fi
+
+exec "$PYTHON" "$HERE/flow.py"

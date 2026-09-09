@@ -89,7 +89,8 @@ Parakeet speech model.
 ```
 
 Use `./run.sh` for the first runs — it stays in the terminal and prints logs so you
-can see what's happening. The menu bar shows **⏳** for ~1 second, then **🎙️** (ready).
+can see what's happening. A small **`LF`** item appears near the right end of the menu
+bar (it shows `LF·` for ~1 second while the model loads, then `LF`).
 
 **5. Grant three macOS permissions**
 
@@ -113,7 +114,9 @@ the app. **Quit and restart LocalFlow after granting.**
 **6. Use it**
 
 - **Hold Right Option (⌥)**, speak, **release**. The text appears at your cursor.
-- Menu-bar icon: 🎙️ ready · 🔴 recording · ✍️ transcribing · ⚠️ error.
+- Menu-bar item: `LF` ready · `● REC` recording · `LF…` transcribing · `LF !` error.
+  If you can't see it, the menu bar is just crowded — hold **⌘** and drag other
+  icons left to make room (or use the free [Ice](https://github.com/jordanbaird/Ice)).
 - While you talk, the waveform island shows near the bottom of the screen.
 
 **7. (optional) Run it always, in the background**
@@ -130,7 +133,7 @@ to allow it.)
 
 ## Starting & stopping (day to day)
 
-**Easiest stop:** click the **🎙️ menu-bar icon → Quit LocalFlow**.
+**Easiest stop:** click the **`LF` menu-bar item → Quit LocalFlow**, or `localflow stop`.
 
 **From the terminal** (`./install.sh` adds a global `localflow` command; until then
 run `./localflow` from the project folder):

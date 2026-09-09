@@ -77,7 +77,7 @@ def resolve_key(name: str):
 
 class LocalFlow(rumps.App):
     def __init__(self):
-        super().__init__("LocalFlow", title="🎙️", quit_button=None)
+        super().__init__("LocalFlow", title="LF·", quit_button=None)
         self.state = "loading"          # loading | idle | rec | work | error
         self.asr = None
         self.last_text = ""
@@ -246,7 +246,9 @@ class LocalFlow(rumps.App):
 
     # ---------- status tick ----------
     def _tick(self, _):
-        icons = {"loading": "⏳", "idle": "🎙️", "rec": "🔴", "work": "✍️", "error": "⚠️"}
+        # Plain-text glyphs: emoji status-bar titles can render zero-width on some
+        # macOS builds, making the item look missing.
+        icons = {"loading": "LF·", "idle": "LF", "rec": "● REC", "work": "LF…", "error": "LF !"}
         labels = {
             "loading": "Loading model…",
             "idle": "Ready — hold %s to talk" % CFG["hotkey"],
@@ -254,7 +256,7 @@ class LocalFlow(rumps.App):
             "work": "Transcribing…",
             "error": "Model error — see logs",
         }
-        self.title = icons.get(self.state, "🎙️")
+        self.title = icons.get(self.state, "LF")
         self.item_status.title = labels.get(self.state, "")
         if self.last_text:
             preview = self.last_text.strip()
@@ -287,4 +289,17 @@ if __name__ == "__main__":
         print("RAW  :", raw)
         print("FINAL:", final)
         sys.exit(0)
+
+    # Single-instance lock: a second launch just exits, so you can never end up
+    # with two menu-bar icons / two hotkey listeners.
+    import fcntl
+    _lock = open(os.path.join(BASE, ".flow.lock"), "w")
+    try:
+        fcntl.flock(_lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError:
+        print("[flow] LocalFlow is already running — this instance is exiting.")
+        sys.exit(0)
+    _lock.write(str(os.getpid()))
+    _lock.flush()
+
     LocalFlow().run()

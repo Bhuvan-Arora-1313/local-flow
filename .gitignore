@@ -1,6 +1,7 @@
 __pycache__/
 *.pyc
 .python-path
+.flow.lock
 localflow.log
 .venv/
 .DS_Store
