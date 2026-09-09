@@ -11,6 +11,8 @@ from Foundation import NSObject, NSMakeRect
 BASE = os.path.dirname(os.path.abspath(__file__))
 CONFIG = os.path.join(BASE, "config.json")
 DICT = os.path.join(BASE, "dictionary.txt")
+if not os.path.exists(DICT) and os.path.exists(os.path.join(BASE, "dictionary.default.txt")):
+    DICT = os.path.join(BASE, "dictionary.default.txt")
 PLIST = os.path.expanduser("~/Library/LaunchAgents/com.localflow.dictation.plist")
 LABEL = "com.localflow.dictation"
 
@@ -405,7 +407,8 @@ class SettingsWindow:
         try:
             self.app.cleaner.model = cfg["ollama_model"]
             self.app.cleaner.hindi_model = cfg["hindi_model"]
-            self.app.cleaner.hindi_active = cfg["hindi_script"] == "latin"
+            self.app.cleaner.hindi_active = (
+                cfg["hindi_script"] == "latin" and "whisper" in cfg.get("asr_model", "").lower())
         except Exception:
             pass
         globals_apply(cfg)

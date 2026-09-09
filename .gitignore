@@ -8,8 +8,10 @@
 LocalFlow.app/Contents/MacOS/LocalFlow
 LocalFlow.app/Contents/Resources/AppIcon.icns.tmp
 LocalFlow.app/Contents/Resources/localflow_home
+LocalFlow.app/Contents/_CodeSignature/
 __pycache__/
 config.json
+dictionary.txt
 history.jsonl
 learned.txt
 localflow.log

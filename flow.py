@@ -56,6 +56,14 @@ except Exception:
     learn = None
 
 DICT_PATH = os.path.join(BASE, "dictionary.txt")
+if not os.path.exists(DICT_PATH):
+    _d = os.path.join(BASE, "dictionary.default.txt")
+    if os.path.exists(_d):
+        try:
+            import shutil
+            shutil.copy(_d, DICT_PATH)
+        except OSError:
+            DICT_PATH = _d
 
 SOUNDS = {
     "start": "/System/Library/Sounds/Tink.aiff",
@@ -121,7 +129,10 @@ class App:
             CFG.get("max_glossary_terms", 240),
             CFG.get("keep_model_loaded", True),
             CFG.get("hindi_model", "gemma3:4b"),
-            CFG.get("hindi_script", "devanagari") == "latin",
+            # only pre-warm the Hindi model when Hindi output is actually possible:
+            # Roman mode AND a Whisper speech model (Parakeet never emits Devanagari)
+            CFG.get("hindi_script", "devanagari") == "latin"
+            and "whisper" in CFG.get("asr_model", "").lower(),
         )
         self._reload_terms()
         self.learner = None

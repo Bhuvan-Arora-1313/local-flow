@@ -1,276 +1,355 @@
-# LocalFlow — a free, on-device Wispr Flow
+# LocalFlow
 
-Hold a key, talk, release. Your speech is transcribed **entirely on your Mac** (Apple
-GPU via MLX), cleaned up by a **local LLM** that knows your jargon, and pasted where
-your cursor is. No account, no credits, no network.
+**A free, on-device dictation app for Apple Silicon Macs — a local Wispr Flow.**
 
-```
- mic  ─►  Parakeet-TDT (MLX, on-GPU)  ─►  dictionary + acronym fixes  ─►  local LLM cleanup (Ollama)  ─►  paste at cursor
-                ~0.3–0.8 s                        instant                        ~0.5–2 s
-```
-
-While you talk, a tiny **island** appears near the bottom of the screen showing a live
-spectrum of your voice, and disappears when you're done.
+Hold a key, talk, release. Your speech is transcribed on your Mac's GPU, cleaned up
+by a local LLM that knows your jargon, and typed wherever your cursor is. No account,
+no subscription, no credits, nothing leaves your machine.
 
 ---
 
-## What you get vs. Wispr Flow
+## Contents
 
-| | Wispr Flow | LocalFlow |
-|---|---|---|
-| Transcription | cloud | local (Parakeet-TDT-0.6b, MLX) |
-| Jargon / names | learned dictionary | `dictionary.txt` (~1,900 terms) + local LLM cleanup |
-| Filler-word removal, punctuation, self-corrections | yes | yes (LLM pass) |
-| Live waveform island | yes | yes |
-| Paste anywhere | yes | yes (clipboard + ⌘V) |
-| Menu-bar app, launch at login | yes | yes |
-| Cost / limits | free tier is capped | unlimited, offline |
-| Latency | ~1 s | ~1–3 s (first use after idle: +2 s to wake the LLM) |
+- [What you get](#what-you-get)
+- [How it works](#how-it-works)
+- [Install](#install)
+- [First run & permissions](#first-run--permissions)
+- [Using it](#using-it)
+- [The models & RAM — important](#the-models--ram--important)
+- [Hindi / Hinglish](#hindi--hinglish)
+- [Settings reference](#settings-reference)
+- [Starting, stopping, updating](#starting-stopping-updating)
+- [Troubleshooting](#troubleshooting)
+- [How the project is laid out](#how-the-project-is-laid-out)
+- [Uninstall](#uninstall)
 
 ---
 
-## Requirements
+## What you get
 
-- **Apple Silicon Mac** — M1 / M2 / M3 / M4. Intel Macs are **not supported** (the
-  speech model needs Apple's MLX / GPU).
-- **macOS 12 or newer.**
-- **~2 GB free disk** (Python environment + speech model).
-- That's it. `git` and `python3` come from Apple's Command Line Tools — the first time
-  you run `git`, macOS pops up an installer; click **Install**. (Or run
-  `xcode-select --install` yourself.)
+| Feature | Notes |
+|---|---|
+| **Push-to-talk dictation** | Hold a key, speak, release → text appears at the cursor, in any app. |
+| **Double-tap to lock** | Quick double-tap the hotkey → records hands-free until you tap again. (Wispr-style.) |
+| **On-screen island** | A small pill at the bottom of the screen shows a live waveform of your voice while you dictate. |
+| **Jargon-aware** | A ~1,900-term dictionary + a local LLM cleanup pass fix product names, acronyms, technical words. |
+| **Learn as you type** | *(opt-in)* unusual words you type get added to the dictionary automatically, with an Undo toast. |
+| **Smart list formatting** | Speak "first… second… third…" and it becomes a numbered list; a lead-in + items becomes bullets. |
+| **Filler & stumble removal** | Drops "um / uh / you know", repeated phrases, false starts; fixes stray commas from speech pauses. |
+| **Hindi / Hinglish** | Optional Whisper model + Roman-output mode: speak Hindi, get `kya haal hai` (or Devanagari). |
+| **Usage & History** | Total words, dictations, day-streak, and your recent transcripts. |
+| **Menu-bar app** | Runs quietly as `LF` in the menu bar. Optional launch-at-login. |
 
-### The two models — and why you probably don't need Ollama
+Everything runs locally. The only network use is a one-time model download during setup.
 
-| | what it does | needed? |
-|---|---|---|
-| **Parakeet** (~0.6 GB) | turns your speech into text, on the GPU | **yes** — but `./setup.sh` downloads it automatically, nothing to install by hand |
-| **Ollama + a small LLM** (~5 GB) | optional *cleanup pass*: fixes misheard jargon & names, removes "um / uh", tidies punctuation | **no** |
+---
 
-Without Ollama you still get real dictation: transcription, punctuation, your
-`dictionary.txt` `=>` corrections, and acronym fixing (`l l m` → `LLM`). Ollama only
-adds the extra polish. LocalFlow auto-detects it — if it isn't running, that step is
-skipped silently.
+## How it works
 
-To enable the cleanup pass: install **[Ollama](https://ollama.com)** (a normal Mac
-app), then in a terminal:
-
-```sh
-ollama pull qwen3:8b
 ```
+  ┌────────┐   ┌─────────────────────┐   ┌──────────────────────┐   ┌───────────────────┐   ┌──────────────┐
+  │  mic   │──▶│  speech-to-text      │──▶│  deterministic fixes │──▶│  local LLM cleanup │──▶│ paste at cursor │
+  │        │   │  Parakeet / Whisper  │   │  dedup, commas,      │   │  jargon, fillers,  │   │  (clipboard+⌘V) │
+  │        │   │  (MLX, on the GPU)   │   │  acronyms, ⇒ terms   │   │  punctuation, lists│   │                 │
+  └────────┘   └─────────────────────┘   └──────────────────────┘   └───────────────────┘   └──────────────┘
+      ~0.3–1 s (Parakeet) / ~1–3 s (Whisper)          instant              ~1–2 s
+```
+
+1. **Speech-to-text** runs on Apple's MLX framework (your GPU):
+   - **Parakeet-TDT 0.6b** — default, English + major European languages, fastest.
+   - **Whisper large-v3-turbo** — optional, multilingual including Hindi.
+2. **Deterministic fixes** (pure code, instant): collapse a repeated phrase, strip
+   pause-commas, expand spelled-out acronyms (`l l m` → `LLM`), apply your
+   `wrong ⇒ right` dictionary rules.
+3. **LLM cleanup** (optional, via [Ollama](https://ollama.com)): fixes misheard
+   jargon using your dictionary as the source of truth, removes fillers, fixes
+   punctuation, and formats spoken lists. Skipped automatically if Ollama isn't
+   running — you still get working dictation.
+4. **Insert** — the text is put on the clipboard and pasted with ⌘V (works in every
+   app), then your old clipboard is restored.
 
 ---
 
 ## Install
 
-**1. Get the code**
+### Requirements
+
+- **Apple Silicon Mac** — M1 / M2 / M3 / M4. **Intel Macs are not supported** (MLX needs Apple's GPU).
+- **macOS 12 or newer.**
+- **~2 GB free disk** for the Python environment + speech model.
+- **[Ollama](https://ollama.com)** — *optional but recommended*, for the jargon
+  cleanup pass. Without it you still get transcription + dictionary + acronym fixes.
+
+### Easiest — one line
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/Bhuvan-Arora-1313/local-flow/main/bootstrap.sh | bash
+```
+
+This clones the repo to `~/localflow` and runs setup. (The first time you run `git`,
+macOS may pop up an installer for the Command Line Tools — click **Install**.)
+
+### Manual
 
 ```sh
 git clone https://github.com/Bhuvan-Arora-1313/local-flow.git
 cd local-flow
-```
-
-**2. Run setup** (one time, ~5 min, needs internet — afterwards it works offline)
-
-```sh
 ./setup.sh
 ```
 
-This creates an isolated Python 3.12 environment (uses `conda` if you have it,
-otherwise a plain `python3` venv), installs the libraries, and downloads the
-Parakeet speech model.
+`setup.sh` (one time, ~5 min, needs internet):
 
-**3. (optional) Set up the cleanup LLM** — install Ollama, then `ollama pull qwen3:8b`
-(see the table above).
+- creates an isolated Python 3.12 environment (uses `conda` if present, else a `venv`),
+- installs the libraries,
+- compiles a tiny native launcher so `LocalFlow.app` is a real double-clickable app,
+- downloads the Parakeet speech model (~0.6 GB).
 
-**4. Start it**
-
-```sh
-./run.sh
-```
-
-Use `./run.sh` for the first runs — it stays in the terminal and prints logs so you
-can see what's happening. A small **`LF`** item appears near the right end of the menu
-bar (it shows `LF·` for ~1 second while the model loads, then `LF`).
-
-**5. Grant three macOS permissions**
-
-macOS attaches permissions to *the program that launched LocalFlow*:
-
-- started with **`./run.sh`** → grant them to **Terminal** (or iTerm / whichever
-  terminal you used)
-- started with **`./install.sh`** (background app) → grant them to **LocalFlow**
-
-Open **System Settings → Privacy & Security** and enable that app under:
-
-| permission | why |
-|---|---|
-| **Microphone** | to hear you |
-| **Input Monitoring** | to detect the hotkey |
-| **Accessibility** | to type/paste the text |
-
-macOS usually prompts on first use. If it doesn't, click **+** in each list and add
-the app. **Quit and restart LocalFlow after granting.**
-
-**6. Use it**
-
-- **Hold Right Option (⌥)**, speak, **release**. The text appears at your cursor.
-- Menu-bar item: `LF` ready · `● REC` recording · `LF…` transcribing · `LF !` error.
-  If you can't see it, the menu bar is just crowded — hold **⌘** and drag other
-  icons left to make room (or use the free [Ice](https://github.com/jordanbaird/Ice)).
-- While you talk, the waveform island shows near the bottom of the screen.
-
-**7. (recommended) Make it automatic**
+### (optional) The cleanup LLM
 
 ```sh
-./install.sh
+# install Ollama from https://ollama.com, then:
+ollama pull qwen3:8b
 ```
 
-This:
-- **starts LocalFlow at every login** (no terminal needed ever again),
-- adds a global **`localflow`** command,
-- makes **`LocalFlow.app`** double-clickable — put it in your Dock or Applications
-  and click it any time to (re)start LocalFlow. Permissions from step 5 then attach
-  to **Python**; grant that once.
-
-(`LocalFlow.app` is unsigned — if a launch is ever blocked, right-click it → **Open**
-once.)
+LocalFlow auto-detects Ollama. Pick any model you have from **Settings → Cleanup model**.
 
 ---
 
-## Starting & stopping (day to day)
-
-**Easiest stop:** click the **`LF` menu-bar item → Quit LocalFlow**, or `localflow stop`.
-
-**From the terminal** (`./install.sh` adds a global `localflow` command; until then
-run `./localflow` from the project folder):
+## First run & permissions
 
 ```sh
-localflow start      # launch in the background (no terminal window kept open)
-localflow stop       # quit it
-localflow restart    # after editing config.json / code
-localflow status     # running? and whether it starts at login
+./run.sh          # runs in the foreground with logs — use this the first time
+```
+
+An `LF` item appears near the right of the menu bar (shows `LF·` for ~1 s while the
+model loads).
+
+**Grant three permissions.** LocalFlow needs macOS to let it watch the keyboard and
+microphone. On first use a dialog appears — click **Open System Settings** and turn
+LocalFlow on. If no dialog appears, add it by hand:
+
+**System Settings → Privacy & Security →**
+
+| Permission | Why |
+|---|---|
+| **Microphone** | to hear you |
+| **Input Monitoring** | to detect the hotkey |
+| **Accessibility** | to type / paste the text |
+
+Then **quit LocalFlow and open it again** — the trust check only runs at startup.
+
+> Permissions attach to whatever launched it: `./run.sh` from a terminal → grant them
+> to **Terminal**; the installed app → grant them to **LocalFlow** / **Python**.
+
+---
+
+## Using it
+
+- **Hold Left Option (⌥)**, speak, **release**. Text lands at your cursor.
+- For a longer dictation: **double-tap** Left Option → it locks and records
+  hands-free → **tap once more** to stop and transcribe.
+- The waveform island shows at the bottom of the screen while you talk.
+- Menu-bar `LF` states: `LF` ready · `● REC` recording · `LF…` transcribing.
+
+The hotkey and recording style are configurable in **Settings**.
+
+### Teaching it your words
+
+**Settings → Dictionary** has a live editor. One entry per line:
+
+```
+# a term you want spelled/capitalised right:
+Kubernetes
+Bhuvan Arora
+gRPC
+
+# a "sounds-like ⇒ what I meant" correction (applied instantly, before the LLM):
+cube ctl => kubectl
+my sequel => MySQL
+```
+
+Turn on **Learn new words as I type** and any unusual word you type twice is added
+automatically — a small toast above the island shows `Added "word"` with an **Undo**
+button.
+
+---
+
+## The models & RAM — important
+
+LocalFlow can use up to **three** models. Only load what you need.
+
+| Model | Job | Size in RAM | Loaded when |
+|---|---|---|---|
+| **Parakeet-TDT 0.6b** *(or Whisper large-v3-turbo)* | speech → text | ~0.6 GB *(Whisper ~1.5 GB)* | always (it's the core) |
+| **Cleanup LLM** — `qwen3:8b` by default | fix jargon, fillers, punctuation, lists | ~6 GB *(varies by model)* | when **AI cleanup** is on |
+| **Hindi model** — `gemma3:4b` by default | romanise Devanagari → Hinglish | ~3 GB | **only when you actually dictate Hindi** |
+
+### Controlling RAM
+
+- **English only?** Leave *Hindi text as* = **Devanagari** (or just never speak
+  Hindi). The Hindi model **never loads** — you only pay for the speech model + the
+  cleanup LLM.
+- **Want the smallest footprint?** In **Settings**, set both *Cleanup model* and
+  *Hindi model* to a small model like `gemma3:4b` (~3 GB) or `llama3.2:3b` (~2 GB).
+  Cleanup quality drops a little; RAM drops a lot.
+- **Don't want the LLM at all?** Turn off **AI cleanup**. You still get transcription,
+  punctuation from the speech model, your `⇒` dictionary rules, and acronym fixing —
+  at ~0.5 s and near-zero extra RAM.
+- **`Keep the AI model always loaded`** *(Settings, on by default)* — keeps the
+  cleanup model resident so there's no ~15 s wake-up lag after an idle period. Turn
+  it **off** to let Ollama free that RAM when you're not dictating (you'll wait a few
+  seconds on the next dictation while it reloads).
+
+### Typical setups
+
+| You want… | Cleanup model | Hindi model | Roughly |
+|---|---|---|---|
+| Fast English, best quality | `qwen3:8b` | *(none)* | speech model + ~6 GB |
+| Smallest RAM, still good | `gemma3:4b` | `gemma3:4b` | speech model + ~3 GB |
+| Tiny | `llama3.2:3b` | `llama3.2:3b` | speech model + ~2 GB |
+| No LLM at all | — (AI cleanup off) | — | just the speech model |
+| English + Hindi (Roman) | `qwen3:8b` | `gemma3:4b` | speech model + ~9 GB (both) |
+
+---
+
+## Hindi / Hinglish
+
+Speak Hindi and get it back in **Roman letters** (`kya haal hai`) or **Devanagari**
+(`क्या हाल है`) — your choice.
+
+**Settings → Keys & models:**
+
+1. **Speech model** → `Whisper large-v3-turbo` (multilingual; downloads ~1.5 GB the
+   first time).
+2. **Language** → `Hindi / Hinglish` (or `Auto-detect`).
+3. **Hindi text as** → `Roman / Hinglish` or `Devanagari`.
+
+**How it works:** Whisper transcribes Hindi accurately in Devanagari, then a small
+dedicated model (`gemma3:4b` by default) transliterates it to casual Roman Hindi,
+keeping English words as English. It's fast (~1 s) and only loads while you're
+actually dictating Hindi.
+
+> Romanisation is ~85% clean with `gemma3:4b` — the occasional word slips. For the
+> best quality you can point *Hindi model* at a larger Indic model (e.g. Sarvam-M),
+> at the cost of RAM. For pure-English sessions, switch the speech model back to
+> **Parakeet** — it's faster.
+
+---
+
+## Settings reference
+
+Open with the menu-bar `LF` → **Settings…** (or ⌘,). Changes to toggles, models and
+dictionary apply immediately; **hotkey / recording style / speech model** take effect
+after you restart LocalFlow.
+
+| Setting | What it does |
+|---|---|
+| **Start LocalFlow at login** | installs/removes a launch agent |
+| **AI cleanup** | run the local LLM pass (needs Ollama) |
+| **Smart formatting** | spoken enumerations → numbered / bulleted lists |
+| **Keep the AI model always loaded** | no wake-up lag; uses that model's RAM while idle |
+| **Show the waveform island** | the bottom-of-screen pill |
+| **Play start / done sounds** | Tink / Pop cues |
+| **Paste automatically** | off = just copy to clipboard |
+| **Add a space after each dictation** | |
+| **Show notifications** | |
+| **Learn new words as I type** | auto-add unusual typed words to the dictionary |
+| **Hotkey** | Right/Left Option, ⌘, ⌃, ⇧, F5–F19 |
+| **Recording style** | hold-or-lock · hold-only · toggle |
+| **Speech model** | Parakeet (English) or Whisper (multilingual) |
+| **Language** | for Whisper: auto / English / Hindi / … |
+| **Hindi text as** | Devanagari or Roman/Hinglish |
+| **Cleanup model** | any model from your `ollama list` |
+| **Hindi model** | model for Devanagari→Roman, or "(none)" |
+| **Ollama model** *(usage/history)* | — |
+| **Dictionary editor** | edit terms & `⇒` rules; Save reloads live |
+| **Usage & History** | totals, streak, recent transcripts |
+
+---
+
+## Starting, stopping, updating
+
+`./install.sh` adds a global **`localflow`** command and starts it at login (and
+copies a clickable **`/Applications/LocalFlow.app`**).
+
+```sh
+localflow start      # run in the background
+localflow stop       # quit it   (or menu-bar LF → Quit LocalFlow)
+localflow restart    # after editing config / code
+localflow status     # running? starts at login?
 localflow logs       # live log (Ctrl-C to stop watching)
 localflow install    # enable start-at-login
 localflow uninstall  # disable start-at-login
 ```
 
-`localflow start` and the menu-bar Quit are all you normally need. `./run.sh` is only
-for the first run / debugging (it holds the terminal and prints logs live).
+Day to day: `localflow start` and the menu-bar **Quit** are all you need. `./run.sh`
+is only for the first run / debugging.
 
----
-
-## Teaching it your jargon
-
-Edit **`dictionary.txt`** (in the project folder), then menu bar → **Reload
-dictionary** (no restart).
-
-```
-# just a term you want spelled right:
-Kubernetes
-Bhuvan Arora
-gRPC
-
-# a "sounds like => what I mean" correction:
-cube ctl => kubectl
-my sequel => MySQL
-```
-
-Ships with ~1,900 terms across formal English, AI/ML, software, data, security,
-cloud, product, finance, medicine, law, science/math, linguistics and philosophy,
-plus ~120 sounds-like corrections. Add your own people, product names and acronyms
-at the top.
-
-How the dictionary is used:
-- **Acronyms** — spelled-out or spaced/dotted letter runs are auto-collapsed before
-  the LLM: `l l m` → `LLM`, `g p u s` → `GPUs`, `R. A. G.` → `RAG`, `l l m's` →
-  `LLM's`. 3+ letters always collapse; 2-letter runs (`a i`, `u x`) only if the pair
-  is a known acronym. The `ACRONYMS & SHORT FORMS` section of `dictionary.txt` pins
-  plural forms (`LLMs`, `APIs`, `KPIs`) and phonetic misspellings.
-- **`=>` lines** — literal whole-word find/replace, applied instantly before the LLM.
-  Bulletproof for terms you know get mangled a specific way.
-- **Plain terms** — the full list biases the Whisper backend directly; the cleanup
-  LLM gets a focused subset (`max_glossary_terms`, default 240, proper nouns /
-  acronyms / product names first). Ordinary rare words ("sycophancy", "pharmaco­kinetics",
-  "stare decisis") are fixed by the LLM from its own knowledge even if not listed —
-  the list matters most for names it can't guess.
-
----
-
-## Configuration — `config.json`
-
-| key | default | meaning |
-|---|---|---|
-| `hotkey` | `alt_r` | push-to-talk key. `cmd_r`, `ctrl_r`, `f5`, `f13`, … |
-| `mode` | `push_to_talk` | or `toggle` (press once to start, again to stop) |
-| `asr_model` | `mlx-community/parakeet-tdt-0.6b-v3` | see "Swapping the model" |
-| `cleanup_enabled` | `true` | run the local LLM cleanup pass |
-| `ollama_model` | `qwen3:8b` | any model you have in `ollama list` |
-| `max_glossary_terms` | `240` | dictionary terms sent to the cleanup LLM per utterance |
-| `min_record_seconds` | `0.35` | ignore accidental taps shorter than this |
-| `auto_paste` | `true` | `false` = just put the text on the clipboard |
-| `trailing_space` | `true` | add a space after each insert |
-| `sounds` | `true` | Tink / Pop / Basso cues |
-| `island` | `true` | show the live-waveform island while dictating |
-
-Toggle the LLM pass live from the menu bar (**AI cleanup**). With it off you still get
-Parakeet's own punctuation + your `=>` corrections, at ~0.5 s latency.
-
-### Swapping the model
-
-- **Faster / lighter**: `mlx-community/parakeet-tdt-0.6b-v2` (English only).
-- **Jargon-biased at the audio stage**: set `asr_model` to
-  `mlx-community/whisper-large-v3-turbo` — the Whisper backend feeds your dictionary
-  in as an `initial_prompt`. Slower (~2–4 s) but sometimes nails rare terms Parakeet
-  misses. It downloads on first use.
-- **Cleanup model**: `qwen3:8b` is a good speed/quality balance. Any model you've
-  pulled with Ollama works — a bigger one (`qwen3:30b`, `gemma2:27b`) is sharper but
-  adds ~1–2 s. Set `ollama_model` in `config.json` to match.
-
----
-
-## Files
-
-```
-local-flow/
-  flow.py            menu-bar app + hotkey + pipeline orchestration
-  asr.py             Parakeet / Whisper backends (MLX)
-  cleanup.py         local LLM cleanup pass (Ollama)
-  dictionary.py      dictionary parser + acronym normaliser
-  recorder.py        microphone capture + live spectrum (sounddevice + FFT)
-  island.py          the floating bottom-screen waveform HUD (AppKit)
-  inserter.py        paste-at-cursor (clipboard + ⌘V)
-  config.json        settings
-  dictionary.txt     your jargon  ← edit this
-  mic_test.py        record 4 s and print the transcript
-  setup.sh           create the Python env + download the model
-  run.sh             foreground run
-  install.sh         install as a login item + add the `localflow` command
-  localflow          start/stop/restart/status/logs control script
-  LocalFlow.app      app bundle (macOS permissions attach to this)
-```
-
-Python env: created by `setup.sh` (conda env `localflow` or `.venv`), Python 3.12 —
-`parakeet-mlx`, `mlx-whisper`, `sounddevice`, `pynput`, `rumps`, `pyobjc`.
-
-Model cache: `~/.cache/huggingface/hub/…parakeet-tdt-0.6b-v3` (~0.6 GB). After the
-first download LocalFlow runs fully offline.
-
-`island.py` can be run on its own (`"$(cat .python-path)" island.py`) to preview the
-HUD for a few seconds.
+**Update:** `cd ~/localflow && git pull && localflow restart` — or just re-run the
+one-line installer.
 
 ---
 
 ## Troubleshooting
 
-| symptom | fix |
+| Symptom | Fix |
 |---|---|
-| Nothing happens on hotkey | grant **Input Monitoring** + **Accessibility** to the launching app (Terminal, or LocalFlow), then restart it. The log shows `This process is not trusted!` until you do. |
-| Records but transcript is empty | run `"$(cat .python-path)" mic_test.py` — check the `peak level`. If ~0: wrong input device, or **Microphone** denied. |
-| Text doesn't paste (but menu → *Copy last transcript* works) | **Accessibility** not granted, or the target app blocks synthetic ⌘V — set `"auto_paste": false` and paste manually. |
-| Cleanup pass never runs | Ollama isn't installed / running, or the model in `ollama_model` isn't pulled. `ollama list` to check. It's optional — dictation still works without it. |
-| First dictation after a break is slow | Ollama unloaded the model; it reloads in ~2 s. Or set `"cleanup_enabled": false`. |
-| Jargon still wrong | add it to `dictionary.txt` (use a `=>` line), menu → Reload dictionary. |
-| Wrong hotkey / conflicts | change `hotkey` in `config.json`, restart. |
-| `setup.sh` fails on `pip install` | your `python3` is probably 3.13+ with no prebuilt wheels — install [Miniconda](https://docs.conda.io/en/latest/miniconda.html) and re-run `./setup.sh` (it'll use conda). |
+| Menu-bar `LF` doesn't appear | you launched it in a way macOS treats as background-only. Use `localflow start` or open `/Applications/LocalFlow.app`. |
+| Nothing happens on the hotkey | grant **Input Monitoring** + **Accessibility**, then **restart** LocalFlow. Log shows `AXIsProcessTrusted = False` until you do. |
+| Records but transcript is empty | wrong input device or **Microphone** denied. Check `~/localflow/localflow.log`. |
+| Text doesn't paste (menu → *Copy last transcript* works) | **Accessibility** not granted, or the app blocks synthetic ⌘V — set *Paste automatically* off and paste by hand. |
+| First dictation after a break is slow | the cleanup model was unloaded. Turn on **Keep the AI model always loaded**. |
+| Cleanup pass never runs | Ollama isn't running, or the chosen model isn't pulled. `ollama list` to check. It's optional. |
+| Uses too much RAM | see [The models & RAM](#the-models--ram--important) — turn off the Hindi mode, pick a smaller cleanup model, or turn off *Keep the AI model always loaded*. |
+| Hindi comes out as Devanagari | Settings → **Hindi text as → Roman / Hinglish** (needs AI cleanup on). |
+| `setup.sh` fails on `pip install` | your `python3` is too new for the wheels — install [Miniconda](https://docs.conda.io/en/latest/miniconda.html) and re-run `./setup.sh`. |
 
-Live logs: `tail -f localflow.log` (or `localflow logs`).
+Logs: `tail -f ~/localflow/localflow.log` (or `localflow logs`).
+
+---
+
+## How the project is laid out
+
+```
+local-flow/
+  flow.py            menu-bar app + hotkey + pipeline orchestration (AppKit)
+  asr.py             Parakeet / Whisper speech-to-text (MLX)
+  cleanup.py         local LLM cleanup pass + Hindi transliteration (Ollama)
+  dictionary.py      dictionary parser, acronym + comma + repeat normalisers
+  recorder.py        microphone capture + live spectrum for the island
+  island.py          the floating waveform island + the "learned word" toast
+  learn.py           opt-in learn-as-you-type
+  usage.py           usage stats + the Usage & History window
+  settings.py        the native Settings window
+  inserter.py        paste-at-cursor
+  launcher.c         compiled bundle entry point (embeds Python)
+  config.default.json   shipped defaults  (your live settings live in config.json, git-ignored)
+  dictionary.txt        the vocabulary  (edit via Settings)
+  setup.sh / build-launcher.sh / install.sh / uninstall.sh / run.sh / localflow / bootstrap.sh
+  LocalFlow.app         the app bundle
+```
+
+Nothing is sent anywhere. Models are cached under `~/.cache/huggingface`; after the
+first download LocalFlow runs fully offline.
+
+---
+
+## Uninstall
+
+```sh
+cd ~/localflow
+./uninstall.sh            # stop it, remove from login items, remove /Applications/LocalFlow.app
+rm -rf ~/localflow        # remove the app
+# optional: remove the Python env and models
+conda env remove -n localflow      # or: rm -rf ~/localflow/.venv
+rm -rf ~/.cache/huggingface/hub/models--mlx-community--parakeet-tdt-0.6b-v3
+```
+
+Also remove **LocalFlow** from System Settings → Privacy & Security (Microphone /
+Input Monitoring / Accessibility).
+
+---
+
+## License
+
+MIT — see [LICENSE](LICENSE).
