@@ -42,6 +42,10 @@ try:
     import usage  # noqa: E402
 except Exception:
     usage = None
+try:
+    import learn  # noqa: E402
+except Exception:
+    learn = None
 
 DICT_PATH = os.path.join(BASE, "dictionary.txt")
 
@@ -108,8 +112,13 @@ class App:
             CFG.get("cleanup_timeout_seconds", 30),
             CFG.get("max_glossary_terms", 240),
         )
-        self.terms, self.corrections = dictmod.load(DICT_PATH)
-        self.acronyms = dictmod.acronym_set(self.terms)
+        self._reload_terms()
+        self.learner = None
+        if learn is not None:
+            try:
+                self.learner = learn.Learner(lambda: self.terms)
+            except Exception as e:
+                print(f"[flow] learner init failed: {e}")
 
         self.island = None
         if CFG.get("island", True) and Island is not None:
@@ -117,6 +126,18 @@ class App:
                 self.island = Island(lambda: (self.state, *self.rec.snapshot()))
             except Exception as e:
                 print(f"[flow] island init failed: {e}")
+
+    def _reload_terms(self):
+        terms, self.corrections = dictmod.load(DICT_PATH)
+        if learn is not None:
+            terms = terms + learn.load_learned()
+        seen, uniq = set(), []
+        for t in terms:
+            if t.lower() not in seen:
+                seen.add(t.lower())
+                uniq.append(t)
+        self.terms = uniq
+        self.acronyms = dictmod.acronym_set(self.terms)
 
     def start_background(self):
         threading.Thread(target=self._load_model, daemon=True).start()
@@ -128,11 +149,14 @@ class App:
             ).start()
         self._listener = keyboard.Listener(on_press=self._on_press, on_release=self._on_release)
         self._listener.start()
+        if self.learner is not None and CFG.get("learn_words", False):
+            self.learner.set_enabled(True)
 
     # ---------- model ----------
     def _load_model(self):
         try:
-            self.asr = Transcriber(CFG["asr_model"], CFG.get("sample_rate", 16000))
+            self.asr = Transcriber(CFG["asr_model"], CFG.get("sample_rate", 16000),
+                                   CFG.get("asr_language", "auto"))
             self.rec.sample_rate = self.asr.sample_rate
             self.state = "idle"
         except Exception as e:
@@ -267,9 +291,12 @@ class App:
 
     # ---------- menu actions ----------
     def reload_dict(self):
-        self.terms, self.corrections = dictmod.load(DICT_PATH)
-        self.acronyms = dictmod.acronym_set(self.terms)
+        self._reload_terms()
         notify("LocalFlow", f"Dictionary reloaded — {len(self.terms)} terms")
+
+    def set_learn(self, on: bool):
+        if self.learner is not None:
+            self.learner.set_enabled(on)
 
     def copy_last(self):
         if self.last_text:
@@ -402,6 +429,8 @@ def run_app(app: App):
             if app.last_text:
                 p = app.last_text.strip()
                 mi_last.setTitle_("Last: " + (p[:40] + "…" if len(p) > 40 else p))
+            if app.learner is not None and app.learner.take_dirty():
+                app._reload_terms()
         except Exception as e:
             print(f"[flow] status_tick: {e}")
 

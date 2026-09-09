@@ -33,6 +33,8 @@ repeated words, and immediate self-corrections ("send it to Bob, no wait, to Ali
 "comma", "question mark", "open quote", "bullet point" -> the punctuation/markup.
 - Keep the person's own wording, tone, register and meaning. Do NOT summarise, paraphrase, answer a \
 question in the text, translate, censor, or add any content or commentary.
+- If the speaker mixes languages (e.g. Hinglish - Hindi + English), keep every word in the language \
+and script they used (romanised Hindi stays romanised); only fix obvious spelling/spacing.
 - If the transcript is already clean, return it unchanged.
 
 Return ONLY the cleaned text - no preamble, no quotes, no notes."""

@@ -5,7 +5,12 @@
   "mode_note": "hold_or_lock = hold to talk, double-tap to lock hands-free (tap again to stop). Also: push_to_talk, toggle.",
 
   "asr_model": "mlx-community/parakeet-tdt-0.6b-v3",
+  "asr_language": "auto",
+  "asr_language_note": "Only used by the Whisper speech model. 'auto' = detect; 'hi' for Hindi/Hinglish. Parakeet ignores this.",
   "sample_rate": 16000,
+
+  "learn_words": false,
+  "learn_words_note": "When true, watches your typing and adds unusual words (not English, seen 2+ times) to learned.txt, which feeds the glossary.",
 
   "cleanup_enabled": true,
   "ollama_url": "http://localhost:11434",

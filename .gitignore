@@ -10,5 +10,6 @@ LocalFlow.app/Contents/Resources/AppIcon.icns.tmp
 LocalFlow.app/Contents/Resources/localflow_home
 __pycache__/
 history.jsonl
+learned.txt
 localflow.log
 stats.json

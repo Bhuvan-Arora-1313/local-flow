@@ -28,6 +28,17 @@ MODES = [
     ("Hold to talk (release to send)", "push_to_talk"),
     ("Press once to start, again to stop", "toggle"),
 ]
+ASR_MODELS = [
+    ("Parakeet — fastest, English / European", "mlx-community/parakeet-tdt-0.6b-v3"),
+    ("Whisper large-v3-turbo — multilingual, Hinglish", "mlx-community/whisper-large-v3-turbo"),
+    ("Whisper large-v3 — most accurate, slower", "mlx-community/whisper-large-v3-mlx"),
+]
+LANGS = [
+    ("Auto-detect", "auto"), ("English", "en"), ("Hindi / Hinglish", "hi"),
+    ("Spanish", "es"), ("French", "fr"), ("German", "de"), ("Portuguese", "pt"),
+    ("Italian", "it"), ("Dutch", "nl"), ("Japanese", "ja"), ("Chinese", "zh"),
+    ("Korean", "ko"), ("Arabic", "ar"), ("Russian", "ru"),
+]
 
 
 # ---------- open-at-login (LaunchAgent) ----------
@@ -114,7 +125,7 @@ class SettingsWindow:
 
     # ---------- build ----------
     def _build(self):
-        W, H = 500, 660
+        W, H = 520, 864
         style = (AppKit.NSWindowStyleMaskTitled | AppKit.NSWindowStyleMaskClosable)
         win = AppKit.NSWindow.alloc().initWithContentRect_styleMask_backing_defer_(
             NSMakeRect(0, 0, W, H), style, AppKit.NSBackingStoreBuffered, False)
@@ -161,6 +172,23 @@ class SettingsWindow:
             self.controls[key] = tf
             y -= 30
 
+        def popup(key, text, items, cur, width=300):
+            nonlocal y
+            lb = AppKit.NSTextField.labelWithString_(text)
+            lb.setFrame_(NSMakeRect(22, y, 150, 20))
+            content.addSubview_(lb)
+            pu = AppKit.NSPopUpButton.alloc().initWithFrame_(
+                NSMakeRect(178, y - 3, width, 26))
+            for lbl, _v in items:
+                pu.addItemWithTitle_(lbl)
+            for lbl, v in items:
+                if v == cur:
+                    pu.selectItemWithTitle_(lbl)
+                    break
+            content.addSubview_(pu)
+            self.controls[key] = pu
+            y -= 34
+
         label("General", bold=True)
         # login checkbox (not stored in config.json; reflects the LaunchAgent)
         b = AppKit.NSButton.alloc().initWithFrame_(NSMakeRect(22, y, W - 44, 20))
@@ -180,41 +208,23 @@ class SettingsWindow:
         check("auto_paste", "Paste automatically (off = just copy)")
         check("trailing_space", "Add a space after each dictation")
         check("notify", "Show notifications")
+        check("learn_words", "Learn new words as I type", default=False)
+        hint = AppKit.NSTextField.labelWithString_(
+            "   Unusual words you type 2+ times get added to the glossary. "
+            "Only single words, all local.")
+        hint.setFont_(AppKit.NSFont.systemFontOfSize_(11))
+        hint.setTextColor_(AppKit.NSColor.secondaryLabelColor())
+        hint.setFrame_(NSMakeRect(22, y, W - 44, 16))
+        content.addSubview_(hint)
+        y -= 24
 
         y -= 6
         label("Keys & models  (restart LocalFlow to apply these)", bold=True)
-
-        # hotkey popup (friendly label -> config value)
-        lb = AppKit.NSTextField.labelWithString_("Hotkey")
-        lb.setFrame_(NSMakeRect(22, y, 150, 20))
-        content.addSubview_(lb)
-        hk = AppKit.NSPopUpButton.alloc().initWithFrame_(NSMakeRect(178, y - 3, 220, 26))
-        for lbl, _v in HOTKEYS:
-            hk.addItemWithTitle_(lbl)
-        cur = cfg.get("hotkey", "alt_l")
-        for lbl, v in HOTKEYS:
-            if v == cur:
-                hk.selectItemWithTitle_(lbl)
-                break
-        content.addSubview_(hk)
-        self.controls["hotkey"] = hk
-        y -= 32
-
-        # mode popup (friendly)
-        lb = AppKit.NSTextField.labelWithString_("Recording style")
-        lb.setFrame_(NSMakeRect(22, y, 150, 20))
-        content.addSubview_(lb)
-        pop = AppKit.NSPopUpButton.alloc().initWithFrame_(NSMakeRect(178, y - 3, 260, 26))
-        for lbl, _v in MODES:
-            pop.addItemWithTitle_(lbl)
-        cm = cfg.get("mode", "hold_or_lock")
-        for lbl, v in MODES:
-            if v == cm:
-                pop.selectItemWithTitle_(lbl)
-                break
-        content.addSubview_(pop)
-        self.controls["mode"] = pop
-        y -= 32
+        popup("hotkey", "Hotkey", HOTKEYS, cfg.get("hotkey", "alt_l"), 240)
+        popup("mode", "Recording style", MODES, cfg.get("mode", "hold_or_lock"))
+        popup("asr_model", "Speech model", ASR_MODELS,
+              cfg.get("asr_model", ASR_MODELS[0][1]))
+        popup("asr_language", "Language", LANGS, cfg.get("asr_language", "auto"), 200)
         textrow("ollama_model", "Ollama model", cfg.get("ollama_model", "qwen3:8b"), 180)
 
         # usage button
@@ -304,14 +314,26 @@ class SettingsWindow:
                 self.app.island.hide()
             except Exception:
                 pass
+        elif key == "learn_words":
+            try:
+                self.app.set_learn(on)
+            except Exception:
+                pass
+        cfg = load_cfg()
+        cfg[key] = on
+        save_cfg(cfg)
 
     def _save(self):
         cfg = load_cfg()
         for key in ("cleanup_enabled", "island", "sounds", "auto_paste",
-                    "trailing_space", "notify"):
+                    "trailing_space", "notify", "learn_words"):
             cfg[key] = bool(self.controls[key].state())
         cfg["hotkey"] = dict(HOTKEYS).get(self.controls["hotkey"].titleOfSelectedItem(), "alt_l")
         cfg["mode"] = dict(MODES).get(self.controls["mode"].titleOfSelectedItem(), "hold_or_lock")
+        cfg["asr_model"] = dict(ASR_MODELS).get(
+            self.controls["asr_model"].titleOfSelectedItem(), ASR_MODELS[0][1])
+        cfg["asr_language"] = dict(LANGS).get(
+            self.controls["asr_language"].titleOfSelectedItem(), "auto")
         cfg["ollama_model"] = self.controls["ollama_model"].stringValue().strip() or "qwen3:8b"
         save_cfg(cfg)
         # live where possible
