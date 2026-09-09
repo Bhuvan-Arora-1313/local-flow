@@ -24,5 +24,7 @@
   "trailing_space": true,
   "sounds": true,
   "notify": true,
-  "island": true
+  "island": true,
+  "keep_model_loaded": true,
+  "keep_model_loaded_note": "true = the Ollama cleanup model stays in RAM forever (no ~15s wake-up lag; uses that model's RAM even when idle)."
 }

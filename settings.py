@@ -223,6 +223,7 @@ class SettingsWindow:
 
         check("cleanup_enabled", "AI cleanup — fix jargon, drop “um / uh”")
         check("smart_formatting", "Smart formatting — spoken lists become bullets / numbers")
+        check("keep_model_loaded", "Keep the AI model always loaded — no wake-up lag (more RAM)")
         check("island", "Show the waveform island while dictating")
         check("sounds", "Play start / done sounds")
         check("auto_paste", "Paste automatically (off = just copy)")
@@ -341,14 +342,22 @@ class SettingsWindow:
                 self.app.set_learn(on)
             except Exception:
                 pass
+        elif key == "keep_model_loaded":
+            try:
+                self.app.cleaner.keep_loaded = on
+                if on:
+                    import threading
+                    threading.Thread(target=self.app.cleaner.ping, daemon=True).start()
+            except Exception:
+                pass
         cfg = load_cfg()
         cfg[key] = on
         save_cfg(cfg)
 
     def _save(self):
         cfg = load_cfg()
-        for key in ("cleanup_enabled", "smart_formatting", "island", "sounds",
-                    "auto_paste", "trailing_space", "notify", "learn_words"):
+        for key in ("cleanup_enabled", "smart_formatting", "keep_model_loaded", "island",
+                    "sounds", "auto_paste", "trailing_space", "notify", "learn_words"):
             cfg[key] = bool(self.controls[key].state())
         cfg["hotkey"] = dict(HOTKEYS).get(self.controls["hotkey"].titleOfSelectedItem(), "alt_l")
         cfg["mode"] = dict(MODES).get(self.controls["mode"].titleOfSelectedItem(), "hold_or_lock")

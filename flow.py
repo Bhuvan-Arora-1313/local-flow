@@ -119,6 +119,7 @@ class App:
             CFG.get("ollama_model", "qwen3:8b"),
             CFG.get("cleanup_timeout_seconds", 30),
             CFG.get("max_glossary_terms", 240),
+            CFG.get("keep_model_loaded", True),
         )
         self._reload_terms()
         self.learner = None
@@ -469,6 +470,11 @@ def run_app(app: App):
     NSTimer.scheduledTimerWithTimeInterval_repeats_block_(0.25, True, lambda t: status_tick())
     if app.island is not None:
         NSTimer.scheduledTimerWithTimeInterval_repeats_block_(1 / 30.0, True, lambda t: island_tick())
+
+    def keep_warm():
+        if app.cleanup_on and app.cleaner.keep_loaded and app.state == "idle":
+            threading.Thread(target=app.cleaner.ping, daemon=True).start()
+    NSTimer.scheduledTimerWithTimeInterval_repeats_block_(180.0, True, lambda t: keep_warm())
 
     print("[flow] menu-bar item created; entering run loop")
     NSApp.run()

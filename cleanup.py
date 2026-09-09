@@ -115,11 +115,17 @@ def select_glossary(terms: list[str], cap: int) -> list[str]:
 
 
 class Cleaner:
-    def __init__(self, url: str, model: str, timeout: int = 30, max_glossary_terms: int = 240):
+    def __init__(self, url: str, model: str, timeout: int = 30, max_glossary_terms: int = 240,
+                 keep_loaded: bool = True):
         self.url = url.rstrip("/")
         self.model = model
         self.timeout = timeout
         self.max_glossary_terms = max_glossary_terms
+        self.keep_loaded = keep_loaded
+
+    @property
+    def keep_alive(self):
+        return -1 if self.keep_loaded else "30m"
 
     def available(self) -> bool:
         try:
@@ -132,6 +138,16 @@ class Cleaner:
         """Preload the model (and prime the glossary prefix cache) at startup."""
         try:
             self.clean("warm up.", glossary or [], _timeout=self.timeout)
+        except Exception:
+            pass
+
+    def ping(self):
+        """Keep the model resident in RAM (called on a timer when keep_loaded).
+        Long timeout so it can also cold-load the model if Ollama was restarted."""
+        try:
+            requests.post(f"{self.url}/api/generate",
+                          json={"model": self.model, "prompt": "", "keep_alive": self.keep_alive},
+                          timeout=90)
         except Exception:
             pass
 
@@ -155,7 +171,7 @@ class Cleaner:
             "system": system,
             "stream": False,
             "think": False,
-            "keep_alive": "30m",
+            "keep_alive": self.keep_alive,
             "options": {"temperature": 0.1, "num_ctx": 8192},
         }
         try:
