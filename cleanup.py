@@ -150,10 +150,14 @@ class Cleaner:
         except Exception:
             return False
 
-    def warm(self, glossary: list[str] | None = None):
-        """Preload the model (and prime the glossary prefix cache) at startup."""
+    def warm(self, glossary: list[str] | None = None,
+             smart_format: bool = True, romanize_hindi: bool = False):
+        """Run the real cleanup prompt on a tiny input so Ollama loads the model
+        and primes its prompt cache (system + glossary). Use the SAME flags the
+        live pipeline uses, or the cached prefix won't match."""
         try:
-            self.clean("warm up.", glossary or [], _timeout=self.timeout)
+            self.clean("warm up.", glossary or [], _timeout=self.timeout,
+                       smart_format=smart_format, romanize_hindi=romanize_hindi)
         except Exception:
             pass
 

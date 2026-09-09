@@ -166,7 +166,10 @@ class App:
         threading.Thread(target=self._worker, daemon=True).start()
         if self.cleanup_on:
             threading.Thread(
-                target=lambda: self.cleaner.available() and self.cleaner.warm(self.terms),
+                target=lambda: self.cleaner.available() and self.cleaner.warm(
+                    self.terms,
+                    smart_format=CFG.get("smart_formatting", True),
+                    romanize_hindi=(CFG.get("hindi_script", "devanagari") == "latin")),
                 daemon=True,
             ).start()
         self._listener = keyboard.Listener(on_press=self._on_press, on_release=self._on_release)
@@ -373,6 +376,18 @@ def run_app(app: App):
     NSApp.finishLaunching()
     print(f"[flow] setActivationPolicy ok={ok} policy={NSApp.activationPolicy()}")
 
+    # Stop macOS App Nap from throttling us while idle (it makes the first
+    # dictation after a quiet period slow — timers fire late, threads throttled).
+    # 0x00FFFFFF = NSActivityUserInitiatedAllowingIdleSystemSleep: no nap, no
+    # sudden/automatic termination, but the Mac can still sleep normally.
+    try:
+        from Foundation import NSProcessInfo
+        app._activity = NSProcessInfo.processInfo().beginActivityWithOptions_reason_(
+            0x00FFFFFF, "LocalFlow must respond to the hotkey instantly")
+        print("[flow] App Nap disabled")
+    except Exception as e:
+        print(f"[flow] app-nap disable failed: {e}")
+
     # Ask for Accessibility (pynput's hotkey + paste need it). The prompting
     # variant puts LocalFlow into System Settings' Accessibility list and shows
     # the standard "Open System Settings" dialog on first run.
@@ -499,9 +514,17 @@ def run_app(app: App):
         NSTimer.scheduledTimerWithTimeInterval_repeats_block_(1 / 30.0, True, lambda t: island_tick())
 
     def keep_warm():
-        if app.cleanup_on and app.cleaner.keep_loaded and app.state == "idle":
-            threading.Thread(target=app.cleaner.ping, daemon=True).start()
-    NSTimer.scheduledTimerWithTimeInterval_repeats_block_(180.0, True, lambda t: keep_warm())
+        # Re-run the full cleanup prompt so Ollama's prompt cache (system + glossary,
+        # ~2000 tokens) stays primed — otherwise the first dictation after a quiet
+        # spell pays ~6 s of prompt reprocessing instead of ~0.3 s.
+        if (app.cleanup_on and app.cleaner.keep_loaded and app.state == "idle"
+                and app._jobs.empty()):
+            threading.Thread(target=lambda: app.cleaner.available() and app.cleaner.warm(
+                app.terms,
+                smart_format=CFG.get("smart_formatting", True),
+                romanize_hindi=(CFG.get("hindi_script", "devanagari") == "latin"),
+            ), daemon=True).start()
+    NSTimer.scheduledTimerWithTimeInterval_repeats_block_(150.0, True, lambda t: keep_warm())
 
     print("[flow] menu-bar item created; entering run loop")
     NSApp.run()
