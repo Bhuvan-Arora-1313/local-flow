@@ -92,6 +92,17 @@ def collapse_repeats(text: str) -> str:
     return text
 
 
+def tidy_commas(text: str) -> str:
+    """Cheap punctuation hygiene before the LLM: drop stray leading/trailing
+    commas and empty comma-gaps left by pause detection ('a, , b' -> 'a, b')."""
+    text = re.sub(r"\s+,", ",", text)
+    text = re.sub(r",\s*(?=,)", "", text)            # ", ," -> ","
+    text = re.sub(r"^[\s,]+", "", text)
+    text = re.sub(r"[\s,]+([.?!])", r"\1", text)     # " ," before . ? !
+    text = re.sub(r"[\s,]+$", "", text)
+    return text
+
+
 def apply_literal_corrections(text: str, corrections: list[tuple[str, str]]) -> str:
     """Case-insensitive whole-word replacement, done before the LLM pass.
 
