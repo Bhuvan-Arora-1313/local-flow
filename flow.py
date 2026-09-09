@@ -120,6 +120,7 @@ class App:
             CFG.get("cleanup_timeout_seconds", 30),
             CFG.get("max_glossary_terms", 240),
             CFG.get("keep_model_loaded", True),
+            CFG.get("hindi_model", "gemma3:4b"),
         )
         self._reload_terms()
         self.learner = None

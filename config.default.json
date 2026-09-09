@@ -26,5 +26,7 @@
   "notify": true,
   "island": true,
   "keep_model_loaded": true,
-  "keep_model_loaded_note": "true = the Ollama cleanup model stays in RAM forever (no ~15s wake-up lag; uses that model's RAM even when idle)."
+  "keep_model_loaded_note": "true = the Ollama cleanup model stays in RAM forever (no ~15s wake-up lag; uses that model's RAM even when idle).",
+  "hindi_model": "gemma3:4b",
+  "hindi_model_note": "Small model used ONLY to romanise Devanagari when hindi_script=latin. Empty = use the main model. gemma3:4b (~3.3GB) transliterates reliably."
 }

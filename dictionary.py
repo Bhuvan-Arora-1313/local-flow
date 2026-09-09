@@ -94,12 +94,20 @@ def collapse_repeats(text: str) -> str:
 
 def tidy_commas(text: str) -> str:
     """Cheap punctuation hygiene before the LLM: drop stray leading/trailing
-    commas and empty comma-gaps left by pause detection ('a, , b' -> 'a, b')."""
+    commas, empty comma-gaps ('a, , b' -> 'a, b'), and — when a line is clearly
+    comma-per-pause (many commas, nearly all segments 1-2 words, no 'and/or/aur')
+    — remove the pause commas entirely."""
     text = re.sub(r"\s+,", ",", text)
     text = re.sub(r",\s*(?=,)", "", text)            # ", ," -> ","
     text = re.sub(r"^[\s,]+", "", text)
     text = re.sub(r"[\s,]+([.?!])", r"\1", text)     # " ," before . ? !
     text = re.sub(r"[\s,]+$", "", text)
+
+    if text.count(",") >= 3:
+        segs = [s.strip() for s in text.split(",") if s.strip()]
+        if segs and sum(len(s.split()) for s in segs) / len(segs) <= 2.0 \
+           and not re.search(r"\b(and|or|aur|ya)\b", text, re.I):
+            text = re.sub(r"\s*,\s*", " ", text).strip()
     return text
 
 

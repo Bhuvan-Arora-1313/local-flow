@@ -114,11 +114,25 @@ def select_glossary(terms: list[str], cap: int) -> list[str]:
     return (priority + plain)[:cap]
 
 
+_DEVANAGARI = re.compile(r"[ऀ-ॿ]")
+
+# Small models translate Hindi if the prompt mentions anything but transliteration,
+# so the Hindi pass is pure transliteration. Cleanup was already done deterministically
+# (collapse_repeats / tidy_commas) before this.
+HINDI_PROMPT = (
+    "Convert every Devanagari word in the line to casual romanised Hindi (Latin letters, "
+    "WhatsApp/chat style, no diacritics). Keep English words exactly as English. Do NOT "
+    "translate any word to English, do NOT paraphrase, do NOT explain or add anything. "
+    "Output ONLY the converted line."
+)
+
+
 class Cleaner:
     def __init__(self, url: str, model: str, timeout: int = 30, max_glossary_terms: int = 240,
-                 keep_loaded: bool = True):
+                 keep_loaded: bool = True, hindi_model: str = ""):
         self.url = url.rstrip("/")
         self.model = model
+        self.hindi_model = hindi_model or ""
         self.timeout = timeout
         self.max_glossary_terms = max_glossary_terms
         self.keep_loaded = keep_loaded
@@ -142,20 +156,44 @@ class Cleaner:
             pass
 
     def ping(self):
-        """Keep the model resident in RAM (called on a timer when keep_loaded).
-        Long timeout so it can also cold-load the model if Ollama was restarted."""
-        try:
-            requests.post(f"{self.url}/api/generate",
-                          json={"model": self.model, "prompt": "", "keep_alive": self.keep_alive},
-                          timeout=90)
-        except Exception:
-            pass
+        """Keep the model(s) resident in RAM (called on a timer when keep_loaded).
+        Long timeout so it can also cold-load a model if Ollama was restarted."""
+        for m in filter(None, (self.model, self.hindi_model)):
+            try:
+                requests.post(f"{self.url}/api/generate",
+                              json={"model": m, "prompt": "", "keep_alive": self.keep_alive},
+                              timeout=90)
+            except Exception:
+                pass
+
+    def _generate(self, model, system, prompt, timeout, num_ctx=8192):
+        payload = {
+            "model": model, "system": system, "prompt": prompt,
+            "stream": False, "think": False, "keep_alive": self.keep_alive,
+            "options": {"temperature": 0.1, "num_ctx": num_ctx},
+        }
+        r = requests.post(f"{self.url}/api/generate", json=payload, timeout=timeout)
+        r.raise_for_status()
+        return _unwrap_quotes(_strip_think(r.json().get("response", "")))
 
     def clean(self, raw: str, glossary: list[str], _timeout: int | None = None,
               smart_format: bool = True, romanize_hindi: bool = False) -> str:
         raw = raw.strip()
         if not raw:
             return raw
+        to = _timeout or self.timeout
+
+        # Hindi -> Roman: dedicated small-model transliteration pass (small models
+        # translate instead of transliterate if asked to do anything else).
+        if romanize_hindi and self.hindi_model and _DEVANAGARI.search(raw):
+            try:
+                out = self._generate(self.hindi_model, HINDI_PROMPT, raw, to)
+                out = re.sub(r"\s*/?no_?think\s*$", "", out, flags=re.I).strip()
+                if out and len(out) <= max(600, len(raw) * 5) and not _DEVANAGARI.search(out):
+                    return out
+            except Exception as e:
+                print(f"[cleanup] hindi pass failed ({e.__class__.__name__}); trying main model")
+
         gl = select_glossary(glossary, self.max_glossary_terms)
         gloss = ", ".join(gl) if gl else "(none provided)"
         system = SYSTEM_PROMPT.replace(

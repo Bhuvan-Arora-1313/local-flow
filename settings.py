@@ -248,7 +248,8 @@ class SettingsWindow:
         popup("asr_language", "Language", LANGS, cfg.get("asr_language", "auto"), 200)
         popup("hindi_script", "Hindi text as", HINDI_SCRIPT,
               cfg.get("hindi_script", "devanagari"), 260)
-        textrow("ollama_model", "Ollama model", cfg.get("ollama_model", "qwen3:8b"), 180)
+        textrow("ollama_model", "Cleanup model", cfg.get("ollama_model", "qwen3:8b"), 200)
+        textrow("hindi_model", "Hindi model", cfg.get("hindi_model", "gemma3:4b"), 200)
 
         # usage button
         bu = AppKit.NSButton.alloc().initWithFrame_(NSMakeRect(178, y, 220, 28))
@@ -368,11 +369,13 @@ class SettingsWindow:
         cfg["hindi_script"] = dict(HINDI_SCRIPT).get(
             self.controls["hindi_script"].titleOfSelectedItem(), "devanagari")
         cfg["ollama_model"] = self.controls["ollama_model"].stringValue().strip() or "qwen3:8b"
+        cfg["hindi_model"] = self.controls["hindi_model"].stringValue().strip()
         save_cfg(cfg)
         # live where possible
         self.app.cleanup_on = cfg["cleanup_enabled"]
         try:
             self.app.cleaner.model = cfg["ollama_model"]
+            self.app.cleaner.hindi_model = cfg["hindi_model"]
         except Exception:
             pass
         globals_apply(cfg)
