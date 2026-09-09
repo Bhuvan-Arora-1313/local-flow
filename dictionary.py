@@ -73,6 +73,25 @@ def normalize_acronyms(text: str, known: set[str]) -> str:
     return _LETTER_RUN.sub(repl, text)
 
 
+_REPEAT_PHRASE = re.compile(
+    r"\b([\w']+(?:[ ,]+[\w']+){1,9})[ ,]*[,.;]?[ ]+\1\b", re.IGNORECASE
+)
+_REPEAT_WORD = re.compile(r"\b(\w+)(?:[ ,]+\1\b){1,4}", re.IGNORECASE)
+
+
+def collapse_repeats(text: str) -> str:
+    """Collapse an immediately-repeated word or phrase (a speech stumble):
+    'the the plan' -> 'the plan';  'ship it, ship it now' -> 'ship it now'.
+    Only adjacent repeats - non-adjacent repetition is left for the LLM."""
+    for _ in range(3):
+        new = _REPEAT_PHRASE.sub(lambda m: m.group(1), text)
+        new = _REPEAT_WORD.sub(lambda m: m.group(1), new)
+        if new == text:
+            break
+        text = new
+    return text
+
+
 def apply_literal_corrections(text: str, corrections: list[tuple[str, str]]) -> str:
     """Case-insensitive whole-word replacement, done before the LLM pass.
 

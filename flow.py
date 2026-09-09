@@ -275,7 +275,8 @@ class App:
                 t0 = time.time()
                 raw = self.asr.transcribe(audio, prompt=", ".join(self.terms))
                 t1 = time.time()
-                text = dictmod.apply_literal_corrections(raw, self.corrections)
+                text = dictmod.collapse_repeats(raw)
+                text = dictmod.apply_literal_corrections(text, self.corrections)
                 text = dictmod.normalize_acronyms(text, self.acronyms)
                 if self.cleanup_on and self.cleaner.available():
                     text = self.cleaner.clean(

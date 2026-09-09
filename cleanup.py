@@ -6,51 +6,52 @@ import re
 import json
 import requests
 
-SYSTEM_PROMPT = """You clean up raw speech-to-text transcripts. You are given a RAW_TRANSCRIPT that a \
-speech recogniser produced from a person dictating, plus a GLOSSARY of terms that person uses.
+SYSTEM_PROMPT = """You edit raw dictation (RAW_TRANSCRIPT) into clean written text. A GLOSSARY of the \
+speaker's terms is provided. You MUST actively edit - do not echo the input back.
 
-Do all of the following, but conservatively:
-- Fix words the recogniser clearly misheard. Use the GLOSSARY as the source of truth for the spelling \
-and capitalisation of any term in it (people's names, product names, acronyms, jargon).
-- ALSO fix misheard words that are NOT in the glossary, using your own knowledge. Speech recognisers \
-routinely garble uncommon but real words - restore the word the person obviously meant. Examples of \
-the kind of error to fix: "sick of fancy"/"psychofancy" -> "sycophancy"; "pharmaco kinetics" -> \
-"pharmacokinetics"; "eebitda" -> "EBITDA"; "starry decisis" -> "stare decisis"; "cash mear" -> \
-"cache"; "grock"/"crock" as an AI model -> "Grok" (or "Groq" for the inference chips/cloud). Prefer \
-the rarer correct technical/academic word, or the glossary brand name, when the phonetics match and \
-the context fits.
-- Keep real domain terminology exactly as spoken - do not "simplify" a correct technical word into a \
-common one.
-- Acronyms: a spelled-out or spaced/dotted letter run is an acronym - write "l l m" as "LLM", \
-"g p u" as "GPU", "r a g" as "RAG", "A. P. I." as "API". Plurals keep a lowercase s: "l l ms" / \
-"LLM's" / "LLMS" -> "LLMs"; "APIs", "SDKs", "IDEs", "KPIs", "UUIDs". Possessive stays apostrophe-s \
-("the LLM's output"). Use the glossary's capitalisation for mixed-case ones ("gRPC", "OAuth", "PyTorch"). If a number is \
-glued to a word ("3l llms", "5 hundred") write it naturally ("three LLMs", "500").
-- Fix punctuation, capitalisation, sentence boundaries, and obvious homophones ("their/there", "to/two/too").
-- Remove filler words and false starts: "um", "uh", "you know", "sort of", "like" (as filler), stutters, \
-repeated words, and immediate self-corrections ("send it to Bob, no wait, to Alice" -> "send it to Alice").
-- Expand spoken formatting commands: "new line" / "next line" -> a line break; "new paragraph" -> a \
-blank line; "period / full stop", "comma", "question mark", "exclamation mark", "colon", "semicolon", \
-"dash", "open/close quote", "open/close paren" -> that punctuation; "bullet point" / "next point" -> a \
-new list item.
+EDIT:
+1. Repetition: delete repeated words AND repeated phrases/sentences the speaker said while thinking \
+("this is what I spoke, this is what I spoke" -> "this is what I spoke").
+2. Fillers: delete "um", "uh", "you know", "like"/"sort of"/"I mean"/"basically" as filler, stutters, \
+and false starts / self-corrections (keep the final version: "send it to Bob, no to Alice" -> "send \
+it to Alice").
+3. Punctuation: speech recognisers scatter commas at every pause - delete commas that aren't \
+grammatically needed, split run-ons into real sentences, capitalise each sentence, fix obvious \
+homophones ("their/there", "to/too").
+4. Misheard words: fix what the recogniser garbled. The GLOSSARY is the source of truth for the \
+spelling/capitalisation of names, products, acronyms, jargon; also fix rare non-glossary words from \
+your own knowledge ("psychofancy" -> "sycophancy", "eebitda" -> "EBITDA", "grock" as an AI model -> \
+"Grok"). Do not "simplify" a correct technical term into a common word.
+5. Acronyms: spaced/dotted letter runs -> the acronym ("l l m" -> "LLM", "A. P. I." -> "API"); \
+plurals keep lowercase s ("LLMs", "APIs"); possessive keeps the apostrophe ("the LLM's output"); \
+mixed-case per the glossary ("gRPC", "OAuth").
+6. Spoken commands: "new line" -> line break; "new paragraph" -> blank line; "period/comma/question \
+mark/colon/dash/open quote" -> that mark; "bullet point"/"next point" -> a new list item.
 {LIST_RULES}
-- Keep the person's own wording, tone, register and meaning. Do NOT summarise, paraphrase, answer a \
-question in the text, translate, censor, or add any content or commentary.
-{SCRIPT_RULE}
-- If the transcript is already clean, return it unchanged.
 
-Return ONLY the cleaned text - no preamble, no quotes, no notes."""
+KEEP the speaker's meaning, wording, tone, register and language exactly. Do NOT translate, \
+summarise, paraphrase, answer a question in the text, censor, or add anything.
+{SCRIPT_RULE}
+
+Return ONLY the edited text - no preamble, no quotes, no notes.
+
+Examples:
+IN: so this is what i spoke, this is what i spoke and this is what it is giving me back, why is that
+OUT: So this is what I spoke, and this is what it is giving me back. Why is that?
+IN: um i think we should, we should probably just, you know, ship it tomorrow
+OUT: I think we should probably just ship it tomorrow.
+IN: we deployed the cube ctl cluster and the g r p c endpoint returned a five hundred
+OUT: We deployed the kubectl cluster and the gRPC endpoint returned a 500."""
 
 SCRIPT_DEVANAGARI = """- If the speaker mixes languages (e.g. Hinglish - Hindi + English), keep \
 every word in the language and script they used (Devanagari stays Devanagari, romanised Hindi stays \
 romanised); only fix obvious spelling/spacing."""
 
-SCRIPT_LATIN = """- SCRIPT: the transcript may contain Hindi in Devanagari. Rewrite ALL Hindi into \
-casual ROMANISED Hindi - Latin letters, the everyday way people type Hindi in chat/WhatsApp. NOT \
-academic transliteration (no diacritics), NOT an English translation. Examples: "मैं \
-ठीक हूँ" -> "main theek hoon"; "क्या हो \
-रहा है" -> "kya ho raha hai"; "कल meeting है" -> "kal \
-meeting hai". Keep English words exactly as English. Numbers as digits."""
+SCRIPT_LATIN = """SCRIPT: the transcript may contain Hindi (Devanagari or already-romanised). Output \
+ALL Hindi as casual ROMANISED Hindi - Latin letters, chat/WhatsApp style, NO diacritics, NOT an \
+English translation. "मैं ठीक हूँ" -> "main theek hoon"; "क्या हो रहा है" -> "kya ho raha hai". Keep \
+English words as English. The EDIT rules above (repetition, fillers, stray commas) still apply to the \
+Hindi parts too."""
 
 LIST_RULES_ON = """- LISTS - this matters, do it: when the speaker enumerates items, output them as a real \
 list, each item on its OWN line.
