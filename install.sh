@@ -22,12 +22,16 @@ else
 fi
 
 PLIST="${HOME}/Library/LaunchAgents/com.localflow.dictation.plist"
+DOMAIN="gui/$(id -u)"
 mkdir -p "${HOME}/Library/LaunchAgents"
 sed -e "s#__LOCALFLOW_HOME__#${HERE}#g" -e "s#__PYBIN__#${PYBIN}#g" \
     "${HERE}/com.localflow.dictation.plist" > "${PLIST}"
 
+launchctl bootout "${DOMAIN}/com.localflow.dictation" 2>/dev/null || true
 launchctl unload "${PLIST}" 2>/dev/null || true
-launchctl load "${PLIST}"
+pkill -f "${HERE}/flow.py" 2>/dev/null || true
+sleep 1
+launchctl bootstrap "${DOMAIN}" "${PLIST}"
 
 echo "LocalFlow installed and started at login."
 echo "Menu-bar item: 'LF' near the right of the menu bar (after ~2s)."

@@ -119,15 +119,21 @@ the app. **Quit and restart LocalFlow after granting.**
   icons left to make room (or use the free [Ice](https://github.com/jordanbaird/Ice)).
 - While you talk, the waveform island shows near the bottom of the screen.
 
-**7. (optional) Run it always, in the background**
+**7. (recommended) Make it automatic**
 
 ```sh
-./install.sh        # starts at login + adds a `localflow` command
+./install.sh
 ```
 
-(The `LocalFlow.app` bundle is unsigned. If you ever launch it by double-clicking
-instead of these scripts, macOS Gatekeeper blocks it — right-click it → **Open** once
-to allow it.)
+This:
+- **starts LocalFlow at every login** (no terminal needed ever again),
+- adds a global **`localflow`** command,
+- makes **`LocalFlow.app`** double-clickable — put it in your Dock or Applications
+  and click it any time to (re)start LocalFlow. Permissions from step 5 then attach
+  to **Python**; grant that once.
+
+(`LocalFlow.app` is unsigned — if a launch is ever blocked, right-click it → **Open**
+once.)
 
 ---
 
