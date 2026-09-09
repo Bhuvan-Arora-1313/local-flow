@@ -1,7 +1,8 @@
 {
   "hotkey": "alt_l",
-  "hotkey_note": "Key held for push-to-talk. Options: alt_r (Right Option), cmd_r (Right Command), ctrl_r (Right Control), f5, f6, f13, etc. Change 'mode' to 'toggle' to press once to start / press again to stop.",
-  "mode": "push_to_talk",
+  "hotkey_note": "Options: alt_l/alt_r (Option), cmd_r, ctrl_r, shift_r, f5..f19. Set from Settings.",
+  "mode": "hold_or_lock",
+  "mode_note": "hold_or_lock = hold to talk, double-tap to lock hands-free (tap again to stop). Also: push_to_talk, toggle.",
 
   "asr_model": "mlx-community/parakeet-tdt-0.6b-v3",
   "sample_rate": 16000,

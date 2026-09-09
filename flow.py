@@ -38,6 +38,10 @@ except Exception as _e:
 from cleanup import Cleaner  # noqa: E402
 import dictionary as dictmod  # noqa: E402
 import inserter  # noqa: E402
+try:
+    import usage  # noqa: E402
+except Exception:
+    usage = None
 
 DICT_PATH = os.path.join(BASE, "dictionary.txt")
 
@@ -92,7 +96,10 @@ class App:
         self._hotkey = resolve_key(CFG["hotkey"])
         self._hotkey_down = False
         self._toggle_on = False
-        self.mode = CFG.get("mode", "push_to_talk")
+        self._locked = False
+        self._press_t = 0.0
+        self._release_timer = None
+        self.mode = CFG.get("mode", "hold_or_lock")
 
         self.rec = Recorder(CFG.get("sample_rate", 16000))
         self.cleaner = Cleaner(
@@ -136,21 +143,63 @@ class App:
     def _on_press(self, key):
         if key != self._hotkey:
             return
-        if self.mode == "push_to_talk":
+        m = self.mode
+        if m == "push_to_talk":
             if self._hotkey_down:
                 return
             self._hotkey_down = True
             self._begin()
-        else:
+        elif m == "toggle":
             self._toggle_on = not self._toggle_on
             self._begin() if self._toggle_on else self._end()
+        else:  # hold_or_lock
+            self._hotkey_down = True
+            if self._locked:
+                self._locked = False
+                self._end()
+                return
+            if self._cancel_release_timer():
+                # pending stop from a quick first tap -> this press is the 2nd
+                # tap of a double-tap: lock hands-free
+                self._locked = True
+                return
+            self._press_t = time.time()
+            self._begin()
 
     def _on_release(self, key):
         if key != self._hotkey:
             return
-        if self.mode == "push_to_talk":
+        m = self.mode
+        if m == "push_to_talk":
             self._hotkey_down = False
             self._end()
+        elif m == "toggle":
+            pass
+        else:  # hold_or_lock
+            self._hotkey_down = False
+            if self._locked or self.state != "rec":
+                return
+            if time.time() - self._press_t < 0.35:
+                t = threading.Timer(0.4, self._release_finalize)
+                t.daemon = True
+                self._release_timer = t
+                t.start()
+            else:
+                self._end()
+
+    def _cancel_release_timer(self) -> bool:
+        t = self._release_timer
+        self._release_timer = None
+        if t is not None:
+            t.cancel()
+            return True
+        return False
+
+    def _release_finalize(self):
+        self._release_timer = None
+        if self._locked or self._hotkey_down:
+            return
+        self._end()
 
     def _begin(self):
         if self.state != "idle":
@@ -198,6 +247,11 @@ class App:
                 print(f"[flow] out={text!r}  (asr {t1-t0:.2f}s, clean {t2-t1:.2f}s)")
                 if text:
                     self.last_text = text
+                    if usage is not None:
+                        try:
+                            usage.record(text)
+                        except Exception:
+                            pass
                     if CFG.get("auto_paste", True):
                         inserter.paste_text(text)
                     else:
@@ -271,6 +325,24 @@ def run_app(app: App):
         def copyLast_(self, sender):
             app.copy_last()
 
+        def openSettings_(self, sender):
+            try:
+                import settings
+                if getattr(app, "_settings_win", None) is None:
+                    app._settings_win = settings.SettingsWindow(app)
+                app._settings_win.show()
+            except Exception as e:
+                print(f"[flow] settings failed: {e}")
+
+        def openUsage_(self, sender):
+            try:
+                import usage as _u
+                if getattr(app, "_usage_win", None) is None:
+                    app._usage_win = _u.UsageWindow()
+                app._usage_win.show()
+            except Exception as e:
+                print(f"[flow] usage failed: {e}")
+
         def quitApp_(self, sender):
             AppKit.NSApp().terminate_(None)
 
@@ -292,8 +364,11 @@ def run_app(app: App):
     menu.addItem_(AppKit.NSMenuItem.separatorItem())
     mi_cleanup = add("AI cleanup", b"toggleCleanup:")
     mi_cleanup.setState_(1 if app.cleanup_on else 0)
-    add("Reload dictionary", b"reloadDict:")
     add("Copy last transcript", b"copyLast:")
+    menu.addItem_(AppKit.NSMenuItem.separatorItem())
+    add("Settings…", b"openSettings:", ",")
+    add("Usage & History…", b"openUsage:")
+    add("Reload dictionary", b"reloadDict:")
     menu.addItem_(AppKit.NSMenuItem.separatorItem())
     add("Quit LocalFlow", b"quitApp:", "q")
 
