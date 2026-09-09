@@ -12,6 +12,11 @@ Hold a key, talk, release. Your speech is transcribed on your Mac's GPU, cleaned
 by a local LLM that knows your jargon, and typed wherever your cursor is. No account,
 no subscription, no credits, nothing leaves your machine.
 
+> **Install [Ollama](https://ollama.com) and `ollama pull qwen3:8b` before you start.**
+> It's technically optional, but the local-LLM cleanup pass is what turns raw,
+> comma-spattered speech-to-text into clean, properly punctuated, jargon-correct
+> text. Without it the output is usable but rough. This is the feature — use it.
+
 ---
 
 ## Contents
@@ -67,10 +72,12 @@ Everything runs locally. The only network use is a one-time model download durin
 2. **Deterministic fixes** (pure code, instant): collapse a repeated phrase, strip
    pause-commas, expand spelled-out acronyms (`l l m` → `LLM`), apply your
    `wrong ⇒ right` dictionary rules.
-3. **LLM cleanup** (optional, via [Ollama](https://ollama.com)): fixes misheard
-   jargon using your dictionary as the source of truth, removes fillers, fixes
-   punctuation, and formats spoken lists. Skipped automatically if Ollama isn't
-   running — you still get working dictation.
+3. **LLM cleanup** (via [Ollama](https://ollama.com) — **strongly recommended**):
+   fixes misheard jargon using your dictionary as the source of truth, removes
+   fillers and repeated phrases, fixes the commas speech recognisers scatter
+   everywhere, and formats spoken lists. This is the step that makes the output
+   *clean* rather than a rough transcript. Skipped automatically if Ollama isn't
+   running.
 4. **Insert** — the text is put on the clipboard and pasted with ⌘V (works in every
    app), then your old clipboard is restored.
 
@@ -83,10 +90,24 @@ Everything runs locally. The only network use is a one-time model download durin
 - **Apple Silicon Mac** — M1 / M2 / M3 / M4. **Intel Macs are not supported** (MLX needs Apple's GPU).
 - **macOS 12 or newer.**
 - **~2 GB free disk** for the Python environment + speech model.
-- **[Ollama](https://ollama.com)** — *optional but recommended*, for the jargon
-  cleanup pass. Without it you still get transcription + dictionary + acronym fixes.
+- **[Ollama](https://ollama.com)** — **strongly recommended.** It runs the local LLM
+  cleanup pass, which is what makes the output clean instead of sloppy. Technically
+  you can run without it (you'd still get transcription + dictionary + acronym fixes),
+  but don't — install it.
 
-### Easiest — one line
+### Step 1 — Ollama (do this first)
+
+Download **[Ollama](https://ollama.com)**, then in a terminal:
+
+```sh
+ollama pull qwen3:8b
+```
+
+This is the cleanup brain. LocalFlow works without it, but the whole point of the app
+is the clean, punctuated, jargon-aware output the LLM produces — plain speech-to-text
+alone is rough. ~5 GB download, one time.
+
+### Step 2 — LocalFlow, one line
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/Bhuvan-Arora-1313/local-flow/main/bootstrap.sh | bash
@@ -95,7 +116,7 @@ curl -fsSL https://raw.githubusercontent.com/Bhuvan-Arora-1313/local-flow/main/b
 This clones the repo to `~/localflow` and runs setup. (The first time you run `git`,
 macOS may pop up an installer for the Command Line Tools — click **Install**.)
 
-### Manual
+Or manual instead of the one-liner:
 
 ```sh
 git clone https://github.com/Bhuvan-Arora-1313/local-flow.git
@@ -110,14 +131,9 @@ cd local-flow
 - compiles a tiny native launcher so `LocalFlow.app` is a real double-clickable app,
 - downloads the Parakeet speech model (~0.6 GB).
 
-### (optional) The cleanup LLM
-
-```sh
-# install Ollama from https://ollama.com, then:
-ollama pull qwen3:8b
-```
-
-LocalFlow auto-detects Ollama. Pick any model you have from **Settings → Cleanup model**.
+LocalFlow auto-detects Ollama on startup. Pick whichever model you pulled from
+**Settings → Cleanup model** (`qwen3:8b` is a good default; smaller models trade a
+little quality for RAM).
 
 ---
 
@@ -318,7 +334,7 @@ one-line installer.
 | Records but transcript is empty | wrong input device or **Microphone** denied. Check `~/localflow/localflow.log`. |
 | Text doesn't paste (menu → *Copy last transcript* works) | **Accessibility** not granted, or the app blocks synthetic ⌘V — set *Paste automatically* off and paste by hand. |
 | First dictation after a break is slow | the cleanup model was unloaded. Turn on **Keep the AI model always loaded**. |
-| Cleanup pass never runs | Ollama isn't running, or the chosen model isn't pulled. `ollama list` to check. It's optional. |
+| Output is rough / lots of commas / fillers left in | The LLM cleanup isn't running. Install [Ollama](https://ollama.com), `ollama pull qwen3:8b`, make sure **AI cleanup** is on and the model is set in Settings. `ollama list` to check what you have. |
 | Uses too much RAM | see [The models & RAM](#the-models--ram--important) — turn off the Hindi mode, pick a smaller cleanup model, or turn off *Keep the AI model always loaded*. |
 | Hindi comes out as Devanagari | Settings → **Hindi text as → Roman / Hinglish** (needs AI cleanup on). |
 | `setup.sh` fails on `pip install` | your `python3` is too new for the wheels — install [Miniconda](https://docs.conda.io/en/latest/miniconda.html) and re-run `./setup.sh`. |
