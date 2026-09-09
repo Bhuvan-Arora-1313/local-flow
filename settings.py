@@ -80,16 +80,30 @@ def set_login(on: bool):
 
 
 # ---------- config i/o ----------
+_DEFAULT = os.path.join(BASE, "config.default.json")
+
+
 def load_cfg() -> dict:
-    path = CONFIG if os.path.exists(CONFIG) else os.path.join(BASE, "config.default.json")
-    with open(path, "r", encoding="utf-8") as f:
-        return json.load(f)
+    for path in (CONFIG, _DEFAULT):
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            if isinstance(data, dict) and data:
+                return data
+        except (OSError, ValueError):
+            continue
+    return {}
 
 
 def save_cfg(cfg: dict):
-    with open(CONFIG, "w", encoding="utf-8") as f:
+    # atomic: write to a temp file then rename, so a crash never truncates config
+    tmp = CONFIG + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
         json.dump(cfg, f, indent=2)
         f.write("\n")
+        f.flush()
+        os.fsync(f.fileno())
+    os.replace(tmp, CONFIG)
 
 
 class _Actions(NSObject):

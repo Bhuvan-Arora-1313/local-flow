@@ -19,11 +19,16 @@ BASE = os.path.dirname(os.path.abspath(__file__))
 
 
 def load_config():
-    path = os.path.join(BASE, "config.json")
-    if not os.path.exists(path):
-        path = os.path.join(BASE, "config.default.json")
-    with open(path, "r", encoding="utf-8") as f:
-        return json.load(f)
+    for path in (os.path.join(BASE, "config.json"),
+                 os.path.join(BASE, "config.default.json")):
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            if isinstance(data, dict) and data:
+                return data
+        except (OSError, ValueError):
+            continue
+    raise RuntimeError("no valid config.json or config.default.json")
 
 
 CFG = load_config()
@@ -176,6 +181,8 @@ class App:
 
     # ---------- hotkey ----------
     def _on_press(self, key):
+        if self.learner is not None and self.learner.enabled:
+            self.learner.feed(key)
         if key != self._hotkey:
             return
         m = self.mode
