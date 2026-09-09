@@ -47,12 +47,13 @@ class WaveView(AppKit.NSView):
             except Exception:
                 pass
         self.state = st
-        n = len(bands) if bands else 15
-        if self.disp is None or len(self.disp) != n:
-            self.disp = np.zeros(n, dtype=float)
-        if st == "rec" and bands:
-            target = np.asarray(bands, dtype=float)
-            self.disp = np.maximum(target, self.disp * 0.80)
+        u = np.asarray(bands, dtype=float) if bands else np.zeros(8)
+        # mirror low->high around the centre: symmetric, centre-weighted
+        target = np.concatenate([u[::-1], u])
+        if self.disp is None or len(self.disp) != len(target):
+            self.disp = np.zeros(len(target), dtype=float)
+        if st == "rec":
+            self.disp = np.maximum(target, self.disp * 0.72)
         else:
             self.disp *= 0.80
         self.setNeedsDisplay_(True)
@@ -75,7 +76,7 @@ class WaveView(AppKit.NSView):
             self._draw_bars(b)
 
     def _draw_bars(self, b):
-        d = self.disp if self.disp is not None else np.zeros(13)
+        d = self.disp if self.disp is not None else np.zeros(16)
         n = len(d)
         area_w = b.size.width - 2 * _PAD_X
         gap = max(1.5, (area_w - _BAR_W * n) / (n - 1)) if n > 1 else 0.0
@@ -175,7 +176,8 @@ if __name__ == "__main__":
     app = AppKit.NSApplication.sharedApplication()
     st = {"mode": "rec"}
     rng = np.random.default_rng()
-    bands = np.zeros(13)
+    bands = np.zeros(8)
+    _profile = np.linspace(1.0, 0.35, 8)   # low freq louder, like a real voice
 
     def provider():
         return st["mode"], 0.1, list(bands)
@@ -191,7 +193,8 @@ if __name__ == "__main__":
         if el > 8:
             AppKit.NSApp().terminate_(None)
         st["mode"] = "work" if 4 < el < 6 else "rec"
-        bands = np.clip(0.3 + 0.7 * rng.random(13) * (0.5 + 0.5 * math.sin(el * 3)), 0, 1)
+        env = 0.45 + 0.55 * math.sin(el * 3)
+        bands = np.clip(_profile * env * (0.55 + 0.45 * rng.random(8)), 0, 1)
         isl.set_state(st["mode"])
         isl.tick()
 

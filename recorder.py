@@ -1,15 +1,21 @@
 """Microphone capture via sounddevice.
 
 While recording it (a) accumulates the raw audio for the transcriber and
-(b) computes a cheap live spectrum (log-spaced FFT bands + RMS level) that the
-on-screen island reads for its waveform.
+(b) computes a cheap live spectrum that the on-screen island mirrors into a
+symmetric, centre-weighted waveform.
+
+`_NB` = number of *unique* frequency bands (low -> high). The island shows them
+mirrored: lowest band in the centre (where the voice has most energy), higher
+bands toward the edges, so it stays symmetric and reacts to what you say.
+Each band has its own auto-gain, so quiet high-frequency sounds (s, sh, t) still
+move the outer bars instead of sitting flat.
 """
 import numpy as np
 import sounddevice as sd
 
-_NB = 13          # number of spectrum bars shown on the island
+_NB = 8
 _FFT = 512        # FFT size (mic blocks at 16 kHz are ~512 frames anyway)
-_FMIN, _FMAX = 90, 5500
+_FMIN, _FMAX = 110, 6500
 
 
 class Recorder:
@@ -21,13 +27,13 @@ class Recorder:
         self._win = np.hanning(_FFT).astype(np.float32)
         self._bands = np.zeros(_NB, dtype=np.float32)
         self._level = 0.0
-        self._agc = 1e-4  # running loudness estimate for auto-gain
+        self._agc = np.full(_NB, 1e-3, dtype=np.float32)  # per-band running max
         self._edges = self._band_edges()
 
     def _band_edges(self):
         freqs = np.fft.rfftfreq(_FFT, 1.0 / self.sample_rate)
         cuts = np.geomspace(_FMIN, min(_FMAX, self.sample_rate / 2 - 1), _NB + 1)
-        return [np.searchsorted(freqs, c) for c in cuts]
+        return [int(np.searchsorted(freqs, c)) for c in cuts]
 
     def _callback(self, indata, frames, time_info, status):
         mono = indata.reshape(-1).astype(np.float32)
@@ -40,14 +46,20 @@ class Recorder:
         if x.size < _FFT:
             x = np.pad(x, (0, _FFT - x.size))
         mag = np.abs(np.fft.rfft(x * self._win))
+
         raw = np.empty(_NB, dtype=np.float32)
         for i in range(_NB):
             a, b = self._edges[i], max(self._edges[i] + 1, self._edges[i + 1])
-            raw[i] = np.sqrt(np.mean(mag[a:b] ** 2)) if b <= mag.size else 0.0
-        raw = np.log1p(raw * 4.0)
+            b = min(b, mag.size)
+            raw[i] = np.sqrt(np.mean(mag[a:b] ** 2)) if b > a else 0.0
+        raw = np.log1p(raw * 6.0)
 
-        self._agc = max(raw.max(), self._agc * 0.995, 1e-4)
-        self._bands = np.clip(raw / self._agc, 0.0, 1.0)
+        # per-band auto-gain: track a decaying max so every band uses its full range
+        self._agc = np.maximum(np.maximum(raw, self._agc * 0.992), 2e-3)
+        norm = np.clip(raw / self._agc, 0.0, 1.0) ** 0.7
+        # gate: below speaking level, collapse toward zero so it rests flat
+        norm *= float(np.clip(rms * 40.0, 0.0, 1.0))
+        self._bands = norm.astype(np.float32)
 
     def start(self):
         if self.recording:
@@ -55,7 +67,7 @@ class Recorder:
         self._frames = []
         self._bands = np.zeros(_NB, dtype=np.float32)
         self._level = 0.0
-        self._agc = 1e-4
+        self._agc = np.full(_NB, 1e-3, dtype=np.float32)
         self._stream = sd.InputStream(
             samplerate=self.sample_rate, channels=1, dtype="float32",
             blocksize=0, callback=self._callback,
@@ -77,7 +89,8 @@ class Recorder:
         return np.concatenate(self._frames).astype(np.float32)
 
     def snapshot(self):
-        """(level 0..~0.3, bands list[float] 0..1) — safe to call from any thread."""
+        """(level, bands) — bands = _NB unique low->high values in 0..1.
+        Safe to call from any thread."""
         return self._level, list(self._bands)
 
     @property
