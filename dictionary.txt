@@ -1,0 +1,2159 @@
+# LocalFlow custom vocabulary / jargon dictionary
+# ------------------------------------------------
+# One entry per line. Two kinds of lines:
+#
+#   1. A plain term you want spelled / capitalised correctly:
+#        Kubernetes
+#        sycophancy
+#        Bhuvan Arora
+#
+#   2. A correction mapping "what it sounds like => what you mean":
+#        cube ctl => kubectl
+#        my sequel => MySQL
+#
+# Lines starting with # are comments. Blank lines are ignored.
+# Plain terms are given to the cleanup LLM as a glossary and (with the Whisper
+# backend) bias recognition directly. "=>" lines are literal whole-word
+# find/replace applied before the LLM.
+#
+# After editing: menu bar -> "Reload dictionary" (no restart).
+
+
+# ============================================================
+#  PEOPLE  (add your teammates, clients, authors you cite)
+# ============================================================
+Bhuvan Arora
+
+
+# ============================================================
+#  HARD / FORMAL ENGLISH VOCABULARY
+#  (words ASR often mangles even though they're plain English)
+# ============================================================
+sycophancy
+sycophant
+sycophantic
+obsequious
+obsequiousness
+unctuous
+servile
+fawning
+toady
+bootlicking
+ingratiating
+deferential
+sanctimonious
+supercilious
+disingenuous
+pusillanimous
+magnanimous
+magnanimity
+equanimity
+pragmatism
+pragmatic
+idiosyncrasy
+idiosyncratic
+ubiquitous
+ubiquity
+verisimilitude
+ostensible
+ostensibly
+tautology
+tautological
+non sequitur
+a priori
+a posteriori
+prima facie
+ipso facto
+ceteris paribus
+mutatis mutandis
+sui generis
+de facto
+de jure
+ad hoc
+ad hominem
+ad nauseam
+bona fide
+caveat
+caveat emptor
+quid pro quo
+status quo
+vis-à-vis
+per se
+inter alia
+et al.
+et cetera
+i.e.
+e.g.
+c.f.
+N.B.
+nuance
+nuanced
+salient
+cogent
+cogency
+tenuous
+spurious
+germane
+extraneous
+egregious
+flagrant
+insidious
+pernicious
+inexorable
+intractable
+untenable
+tenable
+canonical
+orthogonal
+heuristic
+axiomatic
+axiom
+corollary
+tenet
+paradigm
+dichotomy
+juxtaposition
+dialectic
+epistemic
+epistemology
+ontology
+ontological
+teleology
+phenomenology
+empiricism
+rationalism
+utilitarian
+deontology
+consequentialism
+normative
+descriptive
+prescriptive
+reductive
+reductionism
+emergent
+emergence
+recursive
+recursion
+iterative
+holistic
+gestalt
+zeitgeist
+schadenfreude
+laissez-faire
+raison d'être
+tour de force
+fait accompli
+carte blanche
+esprit de corps
+enfant terrible
+
+
+# ============================================================
+#  AI / MACHINE LEARNING
+# ============================================================
+LLM
+LLMs
+large language model
+transformer
+self-attention
+multi-head attention
+cross-attention
+feed-forward network
+positional encoding
+rotary embeddings
+RoPE
+embedding
+embeddings
+tokenizer
+tokenization
+byte-pair encoding
+BPE
+context window
+context length
+KV cache
+inference
+pretraining
+fine-tuning
+fine-tune
+supervised fine-tuning
+SFT
+RLHF
+RLAIF
+DPO
+PPO
+reward model
+alignment
+sycophancy
+hallucination
+hallucinate
+grounding
+retrieval-augmented generation
+RAG
+vector database
+vector store
+semantic search
+cosine similarity
+nearest neighbour
+approximate nearest neighbor
+ANN
+FAISS
+chunking
+re-ranking
+prompt engineering
+prompt injection
+jailbreak
+system prompt
+few-shot
+zero-shot
+chain of thought
+CoT
+ReAct
+agentic
+agent
+multi-agent
+tool use
+function calling
+MCP
+Model Context Protocol
+temperature
+top-p
+top-k
+nucleus sampling
+greedy decoding
+beam search
+logits
+softmax
+perplexity
+cross-entropy
+gradient descent
+stochastic gradient descent
+SGD
+Adam
+AdamW
+backpropagation
+learning rate
+learning rate schedule
+warmup
+weight decay
+dropout
+batch normalization
+layer normalization
+RMSNorm
+activation function
+ReLU
+GELU
+SiLU
+sigmoid
+tanh
+overfitting
+underfitting
+regularization
+epoch
+mini-batch
+checkpoint
+distillation
+knowledge distillation
+quantization
+quantized
+GPTQ
+AWQ
+GGUF
+bitsandbytes
+LoRA
+QLoRA
+PEFT
+adapter
+mixture of experts
+MoE
+sparse
+dense
+diffusion model
+latent diffusion
+U-Net
+VAE
+GAN
+CLIP
+CNN
+convolutional neural network
+RNN
+LSTM
+GRU
+encoder
+decoder
+encoder-decoder
+seq2seq
+BERT
+GPT
+T5
+
+# ---- Model & vendor names (homophone-heavy, ASR struggles here) ----
+Grok
+Groq
+GroqCloud
+xAI
+LPU
+Claude
+Anthropic
+OpenAI
+ChatGPT
+GPT-4o
+GPT-4.1
+o1
+o3
+o4-mini
+Gemini
+Gemini Pro
+Gemini Flash
+Google DeepMind
+Llama
+Llama 3
+Llama 4
+Meta AI
+Mistral
+Mixtral
+Codestral
+Qwen
+Qwen3
+Alibaba
+Gemma
+PaLM
+Phi
+DeepSeek
+DeepSeek-V3
+DeepSeek-R1
+Command R
+Cohere
+Reka
+Jamba
+AI21
+Kimi
+Moonshot AI
+Yi
+01.AI
+Falcon
+Nova
+Titan
+Amazon Bedrock
+Perplexity
+Poe
+OpenRouter
+Together AI
+Fireworks AI
+Replicate
+Baseten
+Modal
+Cerebras
+SambaNova
+Hugging Face
+Nvidia
+TensorRT-LLM
+SGLang
+vLLM
+llama.cpp
+Ollama
+LM Studio
+transformers
+PyTorch
+TensorFlow
+JAX
+Flax
+MLX
+Whisper
+Parakeet
+Conformer
+CTC
+NeMo
+CUDA
+cuDNN
+Triton
+FlashAttention
+tensor parallelism
+pipeline parallelism
+data parallelism
+FSDP
+DeepSpeed
+ZeRO
+gradient checkpointing
+mixed precision
+bfloat16
+float16
+fp8
+GPU
+TPU
+NPU
+VRAM
+HBM
+FLOPs
+tokens per second
+latency
+throughput
+benchmark
+eval
+MMLU
+HumanEval
+GSM8K
+ARC
+HellaSwag
+leaderboard
+F1 score
+precision
+recall
+AUC
+ROC
+confusion matrix
+ground truth
+label
+annotation
+dataset
+train test split
+validation set
+holdout
+cross-validation
+feature engineering
+dimensionality reduction
+PCA
+t-SNE
+UMAP
+clustering
+k-means
+DBSCAN
+random forest
+gradient boosting
+XGBoost
+LightGBM
+CatBoost
+SVM
+support vector machine
+naive Bayes
+logistic regression
+linear regression
+decision tree
+ensemble
+bias-variance tradeoff
+
+
+# ============================================================
+#  SOFTWARE ENGINEERING / PROGRAMMING
+# ============================================================
+API
+REST API
+RESTful
+GraphQL
+gRPC
+protobuf
+Protocol Buffers
+WebSocket
+webhook
+endpoint
+payload
+JSON
+YAML
+TOML
+XML
+CSV
+schema
+serialization
+deserialization
+marshalling
+idempotent
+idempotency
+statelessness
+middleware
+handler
+controller
+router
+namespace
+enum
+struct
+interface
+trait
+generic
+polymorphism
+inheritance
+encapsulation
+abstraction
+closure
+lambda
+higher-order function
+pure function
+side effect
+immutability
+mutation
+memoization
+currying
+recursion
+iterator
+generator
+coroutine
+async
+await
+concurrency
+parallelism
+thread
+threading
+mutex
+semaphore
+deadlock
+race condition
+event loop
+non-blocking
+callback
+promise
+future
+backpressure
+throttle
+debounce
+polling
+long polling
+pub/sub
+publish-subscribe
+message queue
+event-driven
+idempotency key
+retry
+exponential backoff
+circuit breaker
+rate limiting
+pagination
+cursor
+offset
+CRUD
+ORM
+migration
+seeding
+transaction
+rollback
+commit
+ACID
+eventual consistency
+optimistic locking
+pessimistic locking
+deadlock
+n+1 query
+index
+query planner
+sharding
+partitioning
+replication
+read replica
+primary
+failover
+load balancer
+reverse proxy
+CDN
+edge
+cache
+cache invalidation
+TTL
+LRU
+memcached
+Redis
+etcd
+Kafka
+RabbitMQ
+NATS
+Celery
+cron
+cronjob
+daemon
+supervisor
+systemd
+launchd
+stdin
+stdout
+stderr
+exit code
+signal
+SIGTERM
+SIGKILL
+environment variable
+dotenv
+config
+feature flag
+A/B test
+canary deploy
+blue-green deployment
+rolling update
+rollback
+hotfix
+regression
+refactor
+refactoring
+technical debt
+code smell
+linter
+linting
+formatter
+Prettier
+ESLint
+Ruff
+Black
+mypy
+type hint
+type annotation
+static typing
+duck typing
+monkey patching
+dependency injection
+inversion of control
+SOLID
+DRY
+YAGNI
+KISS
+design pattern
+singleton
+factory
+observer
+strategy
+adapter
+facade
+decorator
+composition
+idempotent
+CQRS
+event sourcing
+domain-driven design
+DDD
+microservices
+monolith
+modular monolith
+service mesh
+sidecar
+Istio
+Envoy
+API gateway
+BFF
+serverless
+FaaS
+lambda function
+cold start
+container
+Docker
+Dockerfile
+image
+registry
+Kubernetes
+kubectl
+kubelet
+kubeconfig
+pod
+deployment
+replica set
+stateful set
+daemon set
+namespace
+ingress
+service
+configmap
+secret
+Helm
+Helm chart
+Kustomize
+Terraform
+Pulumi
+Ansible
+infrastructure as code
+IaC
+CI/CD
+pipeline
+GitHub Actions
+GitLab CI
+Jenkins
+runner
+artifact
+build
+smoke test
+unit test
+integration test
+end-to-end test
+E2E
+mock
+stub
+spy
+fixture
+snapshot test
+test coverage
+flaky test
+TDD
+BDD
+pytest
+Jest
+Vitest
+Playwright
+Cypress
+Selenium
+git
+GitHub
+GitLab
+Bitbucket
+commit
+branch
+merge
+rebase
+cherry-pick
+squash
+fast-forward
+merge conflict
+pull request
+merge request
+code review
+diff
+stash
+submodule
+monorepo
+polyrepo
+semantic versioning
+SemVer
+changelog
+release
+tag
+Linux
+Unix
+POSIX
+bash
+zsh
+shell
+SSH
+scp
+rsync
+grep
+awk
+sed
+jq
+curl
+wget
+netcat
+tmux
+vim
+Neovim
+Emacs
+VS Code
+JetBrains
+regex
+regular expression
+glob
+symlink
+inode
+permissions
+chmod
+chown
+sudo
+PATH
+alias
+pipe
+redirect
+process
+PID
+fork
+exec
+signal
+kill
+htop
+strace
+lsof
+dtrace
+
+
+# ============================================================
+#  PROGRAMMING LANGUAGES / RUNTIMES / FRAMEWORKS
+# ============================================================
+Python
+CPython
+PyPy
+pip
+uv
+Poetry
+conda
+virtualenv
+venv
+NumPy
+pandas
+SciPy
+scikit-learn
+Matplotlib
+Jupyter
+JavaScript
+TypeScript
+Node.js
+Deno
+Bun
+npm
+pnpm
+Yarn
+Webpack
+Vite
+Rollup
+esbuild
+Babel
+React
+Next.js
+Vue
+Nuxt
+Svelte
+SvelteKit
+Angular
+SolidJS
+Astro
+Remix
+Redux
+Zustand
+Tailwind CSS
+Tailwind
+CSS
+Sass
+PostCSS
+HTML
+DOM
+shadow DOM
+Web Components
+WASM
+WebAssembly
+Rust
+cargo
+crate
+borrow checker
+lifetime
+ownership
+Tokio
+Go
+Golang
+goroutine
+channel
+Java
+JVM
+Kotlin
+Scala
+Clojure
+Spring
+Spring Boot
+Maven
+Gradle
+C
+C++
+CMake
+Clang
+LLVM
+GCC
+C#
+.NET
+ASP.NET
+Ruby
+Rails
+RubyGems
+PHP
+Laravel
+Swift
+SwiftUI
+Objective-C
+Xcode
+CocoaPods
+SwiftPM
+Elixir
+Erlang
+Phoenix
+Haskell
+OCaml
+Lua
+Perl
+R
+MATLAB
+Julia
+SQL
+PL/pgSQL
+T-SQL
+NoSQL
+
+
+# ============================================================
+#  DATA / DATABASES / ANALYTICS
+# ============================================================
+Postgres
+PostgreSQL
+MySQL
+MariaDB
+SQLite
+SQL Server
+Oracle
+MongoDB
+DynamoDB
+Cassandra
+ScyllaDB
+CockroachDB
+Neo4j
+Elasticsearch
+OpenSearch
+ClickHouse
+DuckDB
+Snowflake
+BigQuery
+Redshift
+Databricks
+Spark
+PySpark
+Hadoop
+HDFS
+Hive
+Presto
+Trino
+Flink
+Airflow
+dbt
+Dagster
+Prefect
+Kafka Connect
+Debezium
+CDC
+ETL
+ELT
+data warehouse
+data lake
+lakehouse
+data mart
+star schema
+snowflake schema
+fact table
+dimension table
+OLAP
+OLTP
+columnar
+Parquet
+ ORC
+Avro
+Arrow
+partition
+bucketing
+window function
+CTE
+common table expression
+materialized view
+stored procedure
+trigger
+foreign key
+primary key
+composite key
+normalization
+denormalization
+cardinality
+histogram
+percentile
+p50
+p95
+p99
+median
+quantile
+z-score
+standard deviation
+variance
+correlation
+covariance
+regression
+time series
+seasonality
+stationarity
+ARIMA
+anomaly detection
+cohort analysis
+funnel
+retention
+churn
+DAU
+MAU
+LTV
+CAC
+ARPU
+attribution
+dashboard
+Tableau
+Power BI
+Looker
+Metabase
+Grafana
+Prometheus
+OpenTelemetry
+observability
+telemetry
+tracing
+span
+metric
+log aggregation
+Datadog
+Sentry
+PagerDuty
+SLA
+SLO
+SLI
+error budget
+MTTR
+MTBF
+incident
+postmortem
+runbook
+
+
+# ============================================================
+#  SECURITY / CRYPTO
+# ============================================================
+authentication
+authorization
+OAuth
+OAuth 2.0
+OIDC
+OpenID Connect
+SAML
+JWT
+JSON Web Token
+bearer token
+refresh token
+session token
+API key
+mTLS
+TLS
+SSL
+HTTPS
+certificate
+certificate authority
+CA
+X.509
+PKI
+public key
+private key
+key pair
+asymmetric encryption
+symmetric encryption
+AES
+RSA
+ECDSA
+Ed25519
+elliptic curve
+Diffie-Hellman
+key exchange
+hashing
+SHA-256
+bcrypt
+scrypt
+Argon2
+PBKDF2
+salt
+pepper
+nonce
+HMAC
+digital signature
+zero trust
+principle of least privilege
+RBAC
+ABAC
+IAM
+SSO
+MFA
+2FA
+TOTP
+passkey
+WebAuthn
+FIDO2
+CSRF
+XSS
+cross-site scripting
+SQL injection
+SSRF
+RCE
+remote code execution
+privilege escalation
+sandbox
+CVE
+CVSS
+zero-day
+threat model
+attack surface
+penetration testing
+red team
+blue team
+SIEM
+WAF
+firewall
+VPN
+DMZ
+DDoS
+rate limiting
+secret management
+Vault
+HSM
+KMS
+envelope encryption
+end-to-end encryption
+forward secrecy
+supply chain security
+SBOM
+CSP
+Content Security Policy
+CORS
+same-origin policy
+
+
+# ============================================================
+#  CLOUD / INFRA / NETWORKING
+# ============================================================
+AWS
+Amazon Web Services
+EC2
+S3
+Lambda
+ECS
+EKS
+Fargate
+RDS
+Aurora
+DynamoDB
+CloudFront
+Route 53
+VPC
+IAM
+CloudWatch
+CloudFormation
+SQS
+SNS
+EventBridge
+Step Functions
+Azure
+GCP
+Google Cloud Platform
+Compute Engine
+Cloud Run
+GKE
+Cloud Functions
+Cloud Storage
+Pub/Sub
+Vertex AI
+Cloudflare
+Cloudflare Workers
+Vercel
+Netlify
+Fly.io
+Railway
+Render
+DigitalOcean
+Heroku
+Supabase
+Firebase
+PlanetScale
+Neon
+Upstash
+DNS
+CNAME
+A record
+MX record
+TXT record
+TTL
+CIDR
+subnet
+NAT
+gateway
+load balancer
+Layer 4
+Layer 7
+TCP
+UDP
+QUIC
+HTTP/2
+HTTP/3
+TLS handshake
+round-trip time
+RTT
+latency
+bandwidth
+throughput
+packet loss
+jitter
+MTU
+proxy
+reverse proxy
+forward proxy
+CDN
+edge network
+anycast
+BGP
+peering
+egress
+ingress
+firewall rule
+security group
+port forwarding
+tunneling
+WireGuard
+OpenVPN
+Tailscale
+mesh network
+
+
+# ============================================================
+#  PRODUCT / DESIGN / BUSINESS
+# ============================================================
+product-market fit
+go-to-market
+GTM
+roadmap
+backlog
+sprint
+scrum
+kanban
+standup
+retrospective
+epic
+user story
+acceptance criteria
+MVP
+proof of concept
+POC
+north star metric
+OKR
+KPI
+stakeholder
+persona
+user journey
+wireframe
+mockup
+prototype
+Figma
+design system
+component library
+accessibility
+a11y
+WCAG
+ARIA
+usability
+heuristic evaluation
+information architecture
+affordance
+onboarding
+activation
+engagement
+conversion rate
+bounce rate
+click-through rate
+CTR
+A/B testing
+multivariate testing
+cohort
+funnel
+churn rate
+net revenue retention
+NRR
+ARR
+MRR
+CAC
+LTV
+payback period
+burn rate
+runway
+gross margin
+unit economics
+TAM
+SAM
+SOM
+moat
+network effect
+flywheel
+freemium
+tiered pricing
+usage-based pricing
+enterprise
+SMB
+B2B
+B2C
+SaaS
+PaaS
+IaaS
+SLA
+procurement
+RFP
+due diligence
+term sheet
+cap table
+vesting
+dilution
+runway
+Series A
+Series B
+seed round
+pre-seed
+valuation
+convertible note
+SAFE
+liquidation preference
+
+
+# ============================================================
+#  FINANCE / ECONOMICS / ACCOUNTING
+# ============================================================
+revenue
+gross profit
+net income
+EBITDA
+operating margin
+cash flow
+free cash flow
+balance sheet
+income statement
+cash flow statement
+accounts receivable
+accounts payable
+accrual
+amortization
+depreciation
+goodwill
+capex
+opex
+working capital
+liquidity
+solvency
+leverage
+debt-to-equity
+equity
+liability
+asset
+dividend
+yield
+coupon
+maturity
+par value
+bond
+treasury
+gilt
+equities
+securities
+derivative
+option
+call option
+put option
+strike price
+futures
+forward contract
+swap
+hedge
+arbitrage
+short selling
+margin
+liquidation
+volatility
+beta
+alpha
+Sharpe ratio
+drawdown
+diversification
+portfolio
+asset allocation
+rebalancing
+index fund
+ETF
+mutual fund
+hedge fund
+private equity
+venture capital
+IPO
+SPAC
+market cap
+P/E ratio
+EPS
+book value
+discounted cash flow
+DCF
+net present value
+NPV
+internal rate of return
+IRR
+WACC
+CAPM
+compound interest
+inflation
+deflation
+stagflation
+GDP
+CPI
+PPI
+monetary policy
+fiscal policy
+central bank
+Federal Reserve
+interest rate
+quantitative easing
+recession
+yield curve
+basis points
+FX
+forex
+exchange rate
+hedging
+FICO
+credit rating
+default
+collateral
+underwriting
+actuarial
+
+
+# ============================================================
+#  MEDICINE / BIOLOGY / HEALTH
+# ============================================================
+diagnosis
+prognosis
+etiology
+pathology
+pathophysiology
+epidemiology
+comorbidity
+idiopathic
+iatrogenic
+prophylaxis
+contraindication
+indication
+efficacy
+adverse event
+placebo
+double-blind
+randomized controlled trial
+RCT
+cohort study
+case-control study
+meta-analysis
+systematic review
+incidence
+prevalence
+morbidity
+mortality
+sensitivity
+specificity
+positive predictive value
+false positive
+biomarker
+in vitro
+in vivo
+in silico
+pharmacokinetics
+pharmacodynamics
+bioavailability
+half-life
+titration
+dosage
+intravenous
+subcutaneous
+intramuscular
+oral
+topical
+antibody
+antigen
+pathogen
+virus
+bacterium
+bacteria
+fungus
+parasite
+immune response
+inflammation
+cytokine
+antigen-presenting cell
+T cell
+B cell
+lymphocyte
+macrophage
+neutrophil
+antibody titer
+vaccine
+mRNA
+adjuvant
+antibiotic
+antiviral
+antifungal
+antimicrobial resistance
+chemotherapy
+radiotherapy
+immunotherapy
+oncology
+carcinoma
+sarcoma
+lymphoma
+leukemia
+metastasis
+benign
+malignant
+tumor
+biopsy
+histology
+cardiology
+neurology
+nephrology
+hepatology
+gastroenterology
+endocrinology
+pulmonology
+rheumatology
+dermatology
+psychiatry
+anesthesia
+hypertension
+hypotension
+tachycardia
+bradycardia
+arrhythmia
+myocardial infarction
+ischemia
+stroke
+embolism
+thrombosis
+sepsis
+diabetes mellitus
+insulin resistance
+hyperglycemia
+hypoglycemia
+thyroid
+cortisol
+adrenaline
+dopamine
+serotonin
+GABA
+acetylcholine
+neuron
+synapse
+axon
+dendrite
+myelin
+neurotransmitter
+genome
+gene
+allele
+chromosome
+DNA
+RNA
+transcription
+translation
+mutation
+CRISPR
+gene editing
+sequencing
+PCR
+polymerase
+enzyme
+protein
+amino acid
+peptide
+mitochondria
+ribosome
+nucleus
+cytoplasm
+membrane
+receptor
+ligand
+homeostasis
+metabolism
+catabolism
+anabolism
+ATP
+glucose
+lipid
+cholesterol
+
+
+# ============================================================
+#  LAW / GOVERNMENT
+# ============================================================
+plaintiff
+defendant
+litigation
+tort
+negligence
+liability
+damages
+punitive damages
+injunction
+subpoena
+deposition
+discovery
+affidavit
+testimony
+hearsay
+precedent
+stare decisis
+jurisdiction
+venue
+statute
+statutory
+regulation
+regulatory
+ordinance
+common law
+civil law
+criminal law
+misdemeanor
+felony
+indictment
+arraignment
+plea
+plea bargain
+acquittal
+conviction
+appeal
+appellate
+writ
+habeas corpus
+due process
+burden of proof
+beyond a reasonable doubt
+preponderance of the evidence
+mens rea
+actus reus
+contract
+breach of contract
+consideration
+indemnification
+indemnity
+liability cap
+force majeure
+arbitration
+mediation
+class action
+settlement
+non-disclosure agreement
+NDA
+intellectual property
+patent
+trademark
+copyright
+trade secret
+licensing
+royalty
+fair use
+public domain
+compliance
+GDPR
+CCPA
+HIPAA
+SOC 2
+ISO 27001
+PCI DSS
+antitrust
+fiduciary duty
+conflict of interest
+whistleblower
+statute of limitations
+constitutional
+amendment
+legislature
+judiciary
+executive
+sovereign
+jurisprudence
+
+
+# ============================================================
+#  SCIENCE / MATH / STATISTICS / PHYSICS / CHEMISTRY
+# ============================================================
+hypothesis
+null hypothesis
+alternative hypothesis
+p-value
+statistical significance
+confidence interval
+standard error
+effect size
+type I error
+type II error
+statistical power
+Bayesian
+frequentist
+prior
+posterior
+likelihood
+marginal
+conditional probability
+Bayes theorem
+Markov chain
+Monte Carlo
+MCMC
+stochastic
+deterministic
+distribution
+Gaussian
+normal distribution
+Poisson
+binomial
+exponential
+uniform
+Bernoulli
+central limit theorem
+law of large numbers
+regression to the mean
+heteroscedasticity
+multicollinearity
+autocorrelation
+overdispersion
+maximum likelihood estimation
+MLE
+least squares
+gradient
+Jacobian
+Hessian
+eigenvalue
+eigenvector
+matrix
+tensor
+scalar
+vector
+dot product
+cross product
+determinant
+transpose
+inverse
+linear algebra
+calculus
+derivative
+integral
+partial derivative
+differential equation
+Fourier transform
+Laplace transform
+convolution
+manifold
+topology
+set theory
+graph theory
+combinatorics
+permutation
+combination
+factorial
+prime number
+modular arithmetic
+number theory
+NP-hard
+NP-complete
+polynomial time
+big O notation
+asymptotic
+entropy
+information theory
+mutual information
+KL divergence
+cross-entropy
+thermodynamics
+enthalpy
+entropy
+Gibbs free energy
+kinetics
+equilibrium
+catalyst
+oxidation
+reduction
+redox
+covalent bond
+ionic bond
+hydrogen bond
+molarity
+stoichiometry
+pH
+acid
+base
+buffer
+isotope
+electron
+proton
+neutron
+quantum
+quantum mechanics
+wave function
+superposition
+entanglement
+quantum computing
+qubit
+decoherence
+relativity
+special relativity
+general relativity
+spacetime
+electromagnetism
+Maxwell's equations
+photon
+electron volt
+Planck constant
+Schrodinger equation
+Heisenberg uncertainty principle
+Newtonian
+momentum
+torque
+angular momentum
+kinetic energy
+potential energy
+velocity
+acceleration
+friction
+viscosity
+turbulence
+Reynolds number
+fluid dynamics
+
+
+# ============================================================
+#  PSYCHOLOGY / COGNITIVE SCIENCE / LINGUISTICS
+# ============================================================
+cognition
+cognitive load
+working memory
+long-term memory
+episodic memory
+semantic memory
+metacognition
+heuristic
+cognitive bias
+confirmation bias
+anchoring bias
+availability heuristic
+Dunning-Kruger effect
+sunk cost fallacy
+survivorship bias
+recency bias
+halo effect
+framing effect
+loss aversion
+prospect theory
+bounded rationality
+System 1
+System 2
+priming
+salience
+attention
+executive function
+neuroplasticity
+conditioning
+reinforcement
+extinction
+habituation
+attachment
+temperament
+personality
+Big Five
+introversion
+extraversion
+neuroticism
+conscientiousness
+agreeableness
+openness
+self-efficacy
+locus of control
+intrinsic motivation
+extrinsic motivation
+flow state
+cognitive dissonance
+theory of mind
+empathy
+prosocial
+antisocial
+narcissism
+psychopathy
+anxiety
+depression
+rumination
+resilience
+burnout
+CBT
+cognitive behavioral therapy
+mindfulness
+placebo effect
+nocebo effect
+phoneme
+morpheme
+syntax
+semantics
+pragmatics
+phonology
+phonetics
+morphology
+lexicon
+lexical
+etymology
+orthography
+prosody
+intonation
+homophone
+homograph
+homonym
+polysemy
+synonym
+antonym
+connotation
+denotation
+corpus
+corpora
+syntax tree
+parse
+dependency parsing
+part of speech
+named entity
+coreference
+anaphora
+deixis
+grapheme
+diphthong
+consonant
+vowel
+sibilant
+fricative
+plosive
+schwa
+loanword
+calque
+neologism
+portmanteau
+idiom
+colloquialism
+vernacular
+register
+code-switching
+
+
+# ============================================================
+#  PHILOSOPHY / RHETORIC / LOGIC
+# ============================================================
+epistemology
+metaphysics
+ontology
+phenomenology
+existentialism
+nihilism
+stoicism
+empiricism
+rationalism
+idealism
+materialism
+determinism
+free will
+dualism
+monism
+solipsism
+utilitarianism
+consequentialism
+deontology
+virtue ethics
+categorical imperative
+social contract
+veil of ignorance
+trolley problem
+Occam's razor
+Hume's guillotine
+is-ought problem
+naturalistic fallacy
+straw man
+ad hominem
+appeal to authority
+appeal to nature
+false dichotomy
+slippery slope
+circular reasoning
+begging the question
+equivocation
+red herring
+Gish gallop
+syllogism
+premise
+conclusion
+valid
+sound
+deductive
+inductive
+abductive
+necessary condition
+sufficient condition
+counterfactual
+thought experiment
+qualia
+the hard problem of consciousness
+categorical
+dialectic
+hermeneutics
+teleological
+a priori
+a posteriori
+analytic
+synthetic
+
+
+# ============================================================
+#  ACRONYMS & SHORT FORMS
+#  Spaced/dotted letter runs ("l l m", "A. P. I.") are auto-collapsed to
+#  uppercase before the LLM. These entries pin the plural forms and the
+#  common phonetic mis-spellings that the auto-collapser can't catch.
+# ============================================================
+LLMs
+APIs
+SDKs
+CLIs
+IDEs
+URLs
+URIs
+UUIDs
+GUIDs
+GPUs
+CPUs
+TPUs
+NPUs
+VMs
+OSes
+DBs
+KPIs
+OKRs
+PRs
+QAs
+UIs
+UXes
+IDs
+IPs
+ACLs
+CDNs
+CVEs
+JWTs
+RNNs
+CNNs
+GANs
+VAEs
+MLPs
+FAQs
+SLAs
+SLOs
+KYCs
+ETFs
+IPOs
+NDAs
+RFPs
+SOWs
+
+l l m => LLM
+l l ms => LLMs
+l l m s => LLMs
+ll ms => LLMs
+llm => LLM
+llms => LLMs
+elle elle em => LLM
+a p i => API
+a p i s => APIs
+a p is => APIs
+s d k => SDK
+s d ks => SDKs
+u r l => URL
+u r ls => URLs
+u i => UI
+u x => UX
+u i ux => UI/UX
+g p u => GPU
+g p us => GPUs
+c p u => CPU
+c p us => CPUs
+i d => ID
+i ds => IDs
+k p i => KPI
+k p is => KPIs
+o k r => OKR
+o k rs => OKRs
+c i c d => CI/CD
+ci cd => CI/CD
+i o t => IoT
+s a s => SaaS
+p a s => PaaS
+i a s => IaaS
+r a g => RAG
+r l h f => RLHF
+c o t => CoT
+m c p => MCP
+j w t => JWT
+o auth => OAuth
+s q l => SQL
+p r => PR
+q a => QA
+c e o => CEO
+c t o => CTO
+c f o => CFO
+v p => VP
+
+# ============================================================
+#  CORRECTIONS  (sounds-like => intended)
+#  These are literal whole-word replacements done before the LLM.
+# ============================================================
+psychofancy => sycophancy
+sick of fancy => sycophancy
+sick a fancy => sycophancy
+psycho fancy => sycophancy
+
+# Grok (xAI's LLM) vs Groq (inference chips) - both said "grock".
+# Bare mishears default to Grok; "cloud"/"chip"/"LPU" context routes to Groq.
+grock cloud => GroqCloud
+grok cloud => GroqCloud
+groq cloud => GroqCloud
+grock chip => Groq chip
+grock chips => Groq chips
+grock l p u => Groq LPU
+grock lpu => Groq LPU
+running on grock => running on Groq
+grock => Grok
+grawk => Grok
+groque => Grok
+grokk => Grok
+grok => Grok
+groq => Groq
+x a i => xAI
+x dot a i => xAI
+cube ctl => kubectl
+cube cuddle => kubectl
+cube control => kubectl
+my sequel => MySQL
+my sql => MySQL
+sequel light => SQLite
+post gres => Postgres
+post grey sql => PostgreSQL
+post gray sequel => PostgreSQL
+no sequel => NoSQL
+g r p c => gRPC
+grpc => gRPC
+gee arpee see => gRPC
+rest api => REST API
+graph cool => GraphQL
+graph q l => GraphQL
+json => JSON
+jason => JSON
+yaml => YAML
+yam l => YAML
+next js => Next.js
+node js => Node.js
+type script => TypeScript
+java script => JavaScript
+git hub => GitHub
+kubernetes => Kubernetes
+cuber netties => Kubernetes
+llm => LLM
+l l m => LLM
+r a g => RAG
+rag pipeline => RAG pipeline
+lora => LoRA
+kv cache => KV cache
+open a i => OpenAI
+hugging face => Hugging Face
+pie torch => PyTorch
+tensor flow => TensorFlow
+numpy => NumPy
+num pie => NumPy
+pandas data frame => pandas DataFrame
+oauth => OAuth
+o auth => OAuth
+jot => JWT
+j w t => JWT
+c s r f => CSRF
+x s s => XSS
+s q l injection => SQL injection
+ee bit dah => EBITDA
+e b i t d a => EBITDA
+kay pee eye => KPI
+oh k r => OKR
+sass company => SaaS company
+ess ess ell => SSL
+tee ell ess => TLS
+c d n => CDN
+a p i => API
+c l i => CLI
+s d k => SDK
+i d e => IDE
+u i => UI
+u x => UX
+c i c d => CI/CD

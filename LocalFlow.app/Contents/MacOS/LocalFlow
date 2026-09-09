@@ -1,0 +1,24 @@
+#!/bin/zsh
+# LocalFlow launcher. Runs the menu-bar dictation app with the project's Python env.
+export PYTHONUNBUFFERED=1
+
+# Project root = three levels up from this script (…/LocalFlow.app/Contents/MacOS/).
+LOCALFLOW_HOME="${0:A:h:h:h:h}"
+export LOCALFLOW_HOME
+LOG="${LOCALFLOW_HOME}/localflow.log"
+
+PYTHON="$(cat "${LOCALFLOW_HOME}/.python-path" 2>/dev/null)"
+[[ -x "$PYTHON" ]] || PYTHON="${HOME}/miniconda3/envs/flow/bin/python"
+[[ -x "$PYTHON" ]] || PYTHON="python3"
+
+# keep the log from growing forever
+[[ -f "${LOG}" && $(wc -c <"${LOG}") -gt 1000000 ]] && : > "${LOG}"
+
+# Once the model is cached, run fully offline so startup is fast and needs no network.
+if ls "${HOME}/.cache/huggingface/hub/models--mlx-community--parakeet-tdt-0.6b-v3/snapshots/"*/config.json >/dev/null 2>&1; then
+  export HF_HUB_OFFLINE=1
+  export TRANSFORMERS_OFFLINE=1
+fi
+
+cd "${LOCALFLOW_HOME}" || exit 1
+exec "${PYTHON}" "${LOCALFLOW_HOME}/flow.py" >>"${LOG}" 2>&1

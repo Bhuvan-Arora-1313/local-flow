@@ -1,0 +1,50 @@
+#!/bin/zsh
+# LocalFlow control:  localflow {start|stop|restart|status|logs|install|uninstall}
+HERE="${0:A:h}"   # resolves symlinks, so `localflow` works from ~/bin too
+APP="${HERE}/LocalFlow.app"
+LOG="${HERE}/localflow.log"
+PLIST="${HOME}/Library/LaunchAgents/com.localflow.dictation.plist"
+LABEL="com.localflow.dictation"
+
+is_running() { pgrep -f "localflow/flow.py" >/dev/null 2>&1; }
+installed()  { [[ -f "$PLIST" ]]; }
+
+start() {
+  if is_running; then echo "LocalFlow is already running."; return; fi
+  if installed; then
+    launchctl bootstrap "gui/$(id -u)" "$PLIST" 2>/dev/null || launchctl load "$PLIST" 2>/dev/null
+  else
+    open "$APP"
+  fi
+  sleep 1
+  is_running && echo "LocalFlow started.  (menu bar: 🎙️)" || echo "Start failed — check: $LOG"
+}
+
+stop() {
+  if installed; then
+    launchctl bootout "gui/$(id -u)/${LABEL}" 2>/dev/null || launchctl unload "$PLIST" 2>/dev/null
+  fi
+  pkill -f "localflow/flow.py" 2>/dev/null
+  sleep 1
+  is_running && echo "Still running — try: pkill -9 -f localflow/flow.py" || echo "LocalFlow stopped."
+}
+
+case "${1:-}" in
+  start)      start ;;
+  stop)       stop ;;
+  restart)    stop; sleep 1; start ;;
+  status)
+    if is_running; then
+      echo "running (pid $(pgrep -f 'localflow/flow.py' | tr '\n' ' '))"
+      if installed; then echo "mode: starts at login (LaunchAgent installed)"; else echo "mode: manual"; fi
+    else
+      echo "stopped"
+      if installed; then echo "mode: will start at next login"; fi
+    fi ;;
+  logs)       tail -n 40 -f "$LOG" ;;
+  install)    "${HERE}/install.sh" ;;
+  uninstall)  "${HERE}/uninstall.sh" ;;
+  *)
+    echo "usage: localflow {start|stop|restart|status|logs|install|uninstall}" ;;
+esac
+exit 0

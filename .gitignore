@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+.python-path
+localflow.log
+.venv/
+.DS_Store
+*.aiff
+*.wav

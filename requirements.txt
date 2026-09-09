@@ -1,0 +1,11 @@
+parakeet-mlx
+mlx-whisper
+sounddevice
+soundfile
+numpy
+pynput
+pyperclip
+requests
+rumps
+pyobjc-framework-Cocoa
+pyobjc-framework-Quartz

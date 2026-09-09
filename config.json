@@ -1,0 +1,22 @@
+{
+  "hotkey": "alt_l",
+  "hotkey_note": "Key held for push-to-talk. Options: alt_r (Right Option), cmd_r (Right Command), ctrl_r (Right Control), f5, f6, f13, etc. Change 'mode' to 'toggle' to press once to start / press again to stop.",
+  "mode": "push_to_talk",
+
+  "asr_model": "mlx-community/parakeet-tdt-0.6b-v3",
+  "sample_rate": 16000,
+
+  "cleanup_enabled": true,
+  "ollama_url": "http://localhost:11434",
+  "ollama_model": "qwen3:8b",
+  "cleanup_timeout_seconds": 30,
+  "max_glossary_terms": 240,
+  "max_glossary_terms_note": "How many dictionary terms to hand the cleanup LLM per utterance (proper nouns / acronyms / product names are prioritised). The full dictionary is still used for literal '=>' corrections. Raising this improves rare-term recall but slows cleanup.",
+
+  "min_record_seconds": 0.35,
+  "auto_paste": true,
+  "trailing_space": true,
+  "sounds": true,
+  "notify": true,
+  "island": true
+}
