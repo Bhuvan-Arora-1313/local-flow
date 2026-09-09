@@ -42,6 +42,7 @@ APPDST="/Applications/LocalFlow.app"
 if rm -rf "$APPDST" 2>/dev/null && cp -R "${HERE}/LocalFlow.app" "$APPDST" 2>/dev/null; then
   mkdir -p "$APPDST/Contents/Resources"
   print -r -- "${HERE}" > "$APPDST/Contents/Resources/localflow_home"
+  codesign --force --deep -s - "$APPDST" 2>/dev/null || true
   /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister \
     -f "$APPDST" 2>/dev/null || true
   echo "Clickable app: ${APPDST}   (also in Launchpad / Spotlight)"

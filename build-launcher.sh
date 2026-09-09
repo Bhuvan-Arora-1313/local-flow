@@ -20,4 +20,9 @@ clang -O2 -DPYLIB_PREFIX="\"${PREFIX}\"" "$HERE/launcher.c" \
   -framework CoreFoundation -o "$OUT"
 chmod +x "$OUT"
 print -r -- "$HERE" > "$HERE/LocalFlow.app/Contents/Resources/localflow_home"
-echo "build-launcher: built $OUT  (python ${VER}, prefix ${PREFIX})"
+
+# Ad-hoc sign so macOS keeps the Privacy permissions attached to a stable identity
+# and shows the permission prompts properly.
+codesign --force --deep -s - "$HERE/LocalFlow.app" 2>/dev/null || true
+
+echo "build-launcher: built + signed $OUT  (python ${VER}, prefix ${PREFIX})"
