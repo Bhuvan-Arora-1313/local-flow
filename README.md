@@ -1,6 +1,12 @@
-# LocalFlow
+<p align="center">
+  <img src="logo.png" alt="LocalFlow" width="160" height="160">
+</p>
 
-**A free, on-device dictation app for Apple Silicon Macs — a local Wispr Flow.**
+<h1 align="center">LocalFlow</h1>
+
+<p align="center"><b>A free, on-device dictation app for Apple Silicon Macs — a local Wispr Flow.</b></p>
+
+---
 
 Hold a key, talk, release. Your speech is transcribed on your Mac's GPU, cleaned up
 by a local LLM that knows your jargon, and typed wherever your cursor is. No account,
