@@ -39,7 +39,7 @@ no subscription, no credits, nothing leaves your machine.
 | **Double-tap to lock** | Quick double-tap the hotkey → records hands-free until you tap again. (Wispr-style.) |
 | **On-screen island** | A small pill at the bottom of the screen shows a live waveform of your voice while you dictate. |
 | **Jargon-aware** | A ~1,900-term dictionary + a local LLM cleanup pass fix product names, acronyms, technical words. |
-| **Learn as you type** | *(opt-in)* unusual words you type get added to the dictionary automatically, with an Undo toast. |
+| **Learn as you type** | *(on by default)* unusual words you type twice get added to the dictionary automatically, with an Undo toast. Only single word tokens, never phrases; off in Settings. |
 | **Smart list formatting** | Speak "first… second… third…" and it becomes a numbered list; a lead-in + items becomes bullets. |
 | **Filler & stumble removal** | Drops "um / uh / you know", repeated phrases, false starts; fixes stray commas from speech pauses. |
 | **Hindi / Hinglish** | Optional Whisper model + Roman-output mode: speak Hindi, get `kya haal hai` (or Devanagari). |
@@ -174,9 +174,11 @@ cube ctl => kubectl
 my sequel => MySQL
 ```
 
-Turn on **Learn new words as I type** and any unusual word you type twice is added
-automatically — a small toast above the island shows `Added "word"` with an **Undo**
-button.
+**Learn new words as I type** is **on by default**: any unusual word you type twice
+(not an ordinary English word, not already known) is added automatically — a small
+toast above the island shows `Added "word"` with an **Undo** button. Only individual
+word tokens are ever looked at or stored, never phrases or sentences, and macOS hides
+password fields from it. Turn it off in Settings if you'd rather curate by hand.
 
 ---
 
@@ -247,6 +249,17 @@ actually dictating Hindi.
 Open with the menu-bar `LF` → **Settings…** (or ⌘,). Changes to toggles, models and
 dictionary apply immediately; **hotkey / recording style / speech model** take effect
 after you restart LocalFlow.
+
+**Out of the box** it's tuned for a fast English first run:
+
+- **Parakeet** speech model (English/European, ~0.6 GB, ~0.5 s) — the multilingual
+  Whisper model and the Hindi model are **not** downloaded or loaded.
+- **AI cleanup on**, using `qwen3:8b` (only if you have Ollama; otherwise skipped).
+- **Kept loaded** so there's no wake-up lag.
+- **Learn-as-you-type on**, **smart formatting on**, island + sounds on.
+- Hotkey **Left Option**, hold-to-talk with **double-tap to lock**.
+
+Switch to Whisper + Hindi only when you want it — see [Hindi / Hinglish](#hindi--hinglish).
 
 | Setting | What it does |
 |---|---|
