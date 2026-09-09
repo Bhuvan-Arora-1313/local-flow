@@ -36,11 +36,21 @@ new list item.
 {LIST_RULES}
 - Keep the person's own wording, tone, register and meaning. Do NOT summarise, paraphrase, answer a \
 question in the text, translate, censor, or add any content or commentary.
-- If the speaker mixes languages (e.g. Hinglish - Hindi + English), keep every word in the language \
-and script they used (romanised Hindi stays romanised); only fix obvious spelling/spacing.
+{SCRIPT_RULE}
 - If the transcript is already clean, return it unchanged.
 
 Return ONLY the cleaned text - no preamble, no quotes, no notes."""
+
+SCRIPT_DEVANAGARI = """- If the speaker mixes languages (e.g. Hinglish - Hindi + English), keep \
+every word in the language and script they used (Devanagari stays Devanagari, romanised Hindi stays \
+romanised); only fix obvious spelling/spacing."""
+
+SCRIPT_LATIN = """- SCRIPT: the transcript may contain Hindi in Devanagari. Rewrite ALL Hindi into \
+casual ROMANISED Hindi - Latin letters, the everyday way people type Hindi in chat/WhatsApp. NOT \
+academic transliteration (no diacritics), NOT an English translation. Examples: "मैं \
+ठीक हूँ" -> "main theek hoon"; "क्या हो \
+रहा है" -> "kya ho raha hai"; "कल meeting है" -> "kal \
+meeting hai". Keep English words exactly as English. Numbers as digits."""
 
 LIST_RULES_ON = """- LISTS - this matters, do it: when the speaker enumerates items, output them as a real \
 list, each item on its OWN line.
@@ -125,14 +135,16 @@ class Cleaner:
             pass
 
     def clean(self, raw: str, glossary: list[str], _timeout: int | None = None,
-              smart_format: bool = True) -> str:
+              smart_format: bool = True, romanize_hindi: bool = False) -> str:
         raw = raw.strip()
         if not raw:
             return raw
         gl = select_glossary(glossary, self.max_glossary_terms)
         gloss = ", ".join(gl) if gl else "(none provided)"
         system = SYSTEM_PROMPT.replace(
-            "{LIST_RULES}", LIST_RULES_ON if smart_format else LIST_RULES_OFF)
+            "{LIST_RULES}", LIST_RULES_ON if smart_format else LIST_RULES_OFF
+        ).replace(
+            "{SCRIPT_RULE}", SCRIPT_LATIN if romanize_hindi else SCRIPT_DEVANAGARI)
         # Stable prefix (glossary) first, variable part (transcript) last -> Ollama
         # reuses the KV cache across dictations.
         user = f"GLOSSARY:\n{gloss}\n\nRAW_TRANSCRIPT:\n{raw}\n\n/no_think"

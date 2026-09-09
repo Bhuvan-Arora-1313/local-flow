@@ -33,6 +33,10 @@ ASR_MODELS = [
     ("Whisper large-v3-turbo — multilingual, Hinglish", "mlx-community/whisper-large-v3-turbo"),
     ("Whisper large-v3 — most accurate, slower", "mlx-community/whisper-large-v3-mlx"),
 ]
+HINDI_SCRIPT = [
+    ("हिंदी (Devanagari)", "devanagari"),
+    ("Roman / Hinglish (kya haal hai)", "latin"),
+]
 LANGS = [
     ("Auto-detect", "auto"), ("English", "en"), ("Hindi / Hinglish", "hi"),
     ("Spanish", "es"), ("French", "fr"), ("German", "de"), ("Portuguese", "pt"),
@@ -77,7 +81,8 @@ def set_login(on: bool):
 
 # ---------- config i/o ----------
 def load_cfg() -> dict:
-    with open(CONFIG, "r", encoding="utf-8") as f:
+    path = CONFIG if os.path.exists(CONFIG) else os.path.join(BASE, "config.default.json")
+    with open(path, "r", encoding="utf-8") as f:
         return json.load(f)
 
 
@@ -125,7 +130,7 @@ class SettingsWindow:
 
     # ---------- build ----------
     def _build(self):
-        W, H = 520, 892
+        W, H = 520, 928
         style = (AppKit.NSWindowStyleMaskTitled | AppKit.NSWindowStyleMaskClosable)
         win = AppKit.NSWindow.alloc().initWithContentRect_styleMask_backing_defer_(
             NSMakeRect(0, 0, W, H), style, AppKit.NSBackingStoreBuffered, False)
@@ -226,6 +231,8 @@ class SettingsWindow:
         popup("asr_model", "Speech model", ASR_MODELS,
               cfg.get("asr_model", ASR_MODELS[0][1]))
         popup("asr_language", "Language", LANGS, cfg.get("asr_language", "auto"), 200)
+        popup("hindi_script", "Hindi text as", HINDI_SCRIPT,
+              cfg.get("hindi_script", "devanagari"), 260)
         textrow("ollama_model", "Ollama model", cfg.get("ollama_model", "qwen3:8b"), 180)
 
         # usage button
@@ -335,6 +342,8 @@ class SettingsWindow:
             self.controls["asr_model"].titleOfSelectedItem(), ASR_MODELS[0][1])
         cfg["asr_language"] = dict(LANGS).get(
             self.controls["asr_language"].titleOfSelectedItem(), "auto")
+        cfg["hindi_script"] = dict(HINDI_SCRIPT).get(
+            self.controls["hindi_script"].titleOfSelectedItem(), "devanagari")
         cfg["ollama_model"] = self.controls["ollama_model"].stringValue().strip() or "qwen3:8b"
         save_cfg(cfg)
         # live where possible

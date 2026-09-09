@@ -19,7 +19,10 @@ BASE = os.path.dirname(os.path.abspath(__file__))
 
 
 def load_config():
-    with open(os.path.join(BASE, "config.json"), "r", encoding="utf-8") as f:
+    path = os.path.join(BASE, "config.json")
+    if not os.path.exists(path):
+        path = os.path.join(BASE, "config.default.json")
+    with open(path, "r", encoding="utf-8") as f:
         return json.load(f)
 
 
@@ -270,7 +273,8 @@ class App:
                 if self.cleanup_on and self.cleaner.available():
                     text = self.cleaner.clean(
                         text, self.terms,
-                        smart_format=CFG.get("smart_formatting", True))
+                        smart_format=CFG.get("smart_formatting", True),
+                        romanize_hindi=(CFG.get("hindi_script", "devanagari") == "latin"))
                 elif text:
                     text = text[0].upper() + text[1:]
                 t2 = time.time()

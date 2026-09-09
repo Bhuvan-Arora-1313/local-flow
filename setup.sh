@@ -52,6 +52,7 @@ echo "• installing dependencies (a few minutes; ~250 MB download)…"
 
 echo "$PYBIN" > "$HERE/.python-path"
 chmod +x "$HERE"/*.sh "$HERE/localflow" 2>/dev/null || true
+[[ -f "$HERE/config.json" ]] || cp "$HERE/config.default.json" "$HERE/config.json"
 
 echo "• building the app launcher…"
 "$HERE/build-launcher.sh" || echo "  (build failed — you can still use ./run.sh)"
