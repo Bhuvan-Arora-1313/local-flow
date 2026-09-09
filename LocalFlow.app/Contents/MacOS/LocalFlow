@@ -1,12 +1,30 @@
 #!/bin/zsh
-# Double-clicking LocalFlow.app runs this. It hands off to the `localflow` control
-# script (single-instance lock, offline env, launchd-or-nohup) and exits.
-HERE="${0:A:h:h:h:h}"          # …/LocalFlow.app/Contents/MacOS/ -> project root
+# Bundle executable. Launched by `open LocalFlow.app` or the LaunchAgent.
+# It exec's Python directly (in-process) so rumps' menu-bar item initialises
+# properly — handing off to a detached process does NOT create the status item.
+export PYTHONUNBUFFERED=1
 
-if pgrep -f "${HERE}/flow.py" >/dev/null 2>&1; then
-  osascript -e 'display notification "Already running — look for “LF” in the menu bar." with title "LocalFlow"' >/dev/null 2>&1
-  exit 0
+CANDIDATES=(
+  "__LOCALFLOW_HOME__"
+  "${0:A:h:h:h:h}"
+  "${HOME}/localflow"
+  "${HOME}/local-flow"
+)
+HERE=""
+for c in $CANDIDATES; do
+  [[ -f "$c/flow.py" ]] && HERE="$c" && break
+done
+[[ -n "$HERE" ]] || { osascript -e 'display alert "LocalFlow" message "Project folder not found — re-run ./install.sh."'; exit 1; }
+
+LOG="${HERE}/localflow.log"
+PY="$(cat "${HERE}/.python-path" 2>/dev/null)"
+[[ -x "$PY" ]] || PY="${HOME}/miniconda3/envs/flow/bin/python"
+[[ -x "$PY" ]] || PY="$(command -v python3)"
+
+[[ -f "$LOG" && $(wc -c <"$LOG") -gt 1000000 ]] && : > "$LOG"
+if ls "${HOME}/.cache/huggingface/hub/models--mlx-community--parakeet-tdt-0.6b-v3/snapshots/"*/config.json >/dev/null 2>&1; then
+  export HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1
 fi
 
-"${HERE}/localflow" start >/dev/null 2>&1
-osascript -e 'display notification "Starting… “LF” will appear in the menu bar in a moment." with title "LocalFlow"' >/dev/null 2>&1
+cd "$HERE" || exit 1
+exec "$PY" "${HERE}/flow.py" >>"$LOG" 2>&1

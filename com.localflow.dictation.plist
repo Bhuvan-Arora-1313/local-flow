@@ -4,34 +4,26 @@
 <dict>
     <key>Label</key>
     <string>com.localflow.dictation</string>
+
+    <!-- Launch through `open` so LaunchServices runs LocalFlow.app in the Aqua
+         GUI session; that's what lets the menu-bar item appear. `-W` makes open
+         wait for the app to exit, so KeepAlive tracks the app's lifetime. -->
     <key>ProgramArguments</key>
     <array>
-        <string>__PYBIN__</string>
-        <string>__LOCALFLOW_HOME__/flow.py</string>
+        <string>/usr/bin/open</string>
+        <string>-W</string>
+        <string>__LOCALFLOW_HOME__/LocalFlow.app</string>
     </array>
-    <key>WorkingDirectory</key>
-    <string>__LOCALFLOW_HOME__</string>
-    <key>EnvironmentVariables</key>
-    <dict>
-        <key>PYTHONUNBUFFERED</key>
-        <string>1</string>
-        <key>HF_HUB_OFFLINE</key>
-        <string>1</string>
-        <key>TRANSFORMERS_OFFLINE</key>
-        <string>1</string>
-    </dict>
+
     <key>RunAtLoad</key>
     <true/>
     <key>KeepAlive</key>
-    <dict>
-        <key>SuccessfulExit</key>
-        <false/>
-    </dict>
+    <true/>
+    <key>ThrottleInterval</key>
+    <integer>10</integer>
+    <key>LimitLoadToSessionType</key>
+    <string>Aqua</string>
     <key>ProcessType</key>
     <string>Interactive</string>
-    <key>StandardOutPath</key>
-    <string>__LOCALFLOW_HOME__/localflow.log</string>
-    <key>StandardErrorPath</key>
-    <string>__LOCALFLOW_HOME__/localflow.log</string>
 </dict>
 </plist>
