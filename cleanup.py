@@ -129,10 +129,12 @@ HINDI_PROMPT = (
 
 class Cleaner:
     def __init__(self, url: str, model: str, timeout: int = 30, max_glossary_terms: int = 240,
-                 keep_loaded: bool = True, hindi_model: str = ""):
+                 keep_loaded: bool = True, hindi_model: str = "", hindi_active: bool = False):
         self.url = url.rstrip("/")
         self.model = model
         self.hindi_model = hindi_model or ""
+        self.hindi_active = hindi_active     # config says Hindi->Roman is on
+        self._hindi_used = False             # a Hindi transcript has actually come through
         self.timeout = timeout
         self.max_glossary_terms = max_glossary_terms
         self.keep_loaded = keep_loaded
@@ -157,8 +159,12 @@ class Cleaner:
 
     def ping(self):
         """Keep the model(s) resident in RAM (called on a timer when keep_loaded).
-        Long timeout so it can also cold-load a model if Ollama was restarted."""
-        for m in filter(None, (self.model, self.hindi_model)):
+        The Hindi model is only kept warm once Hindi is actually in use, so an
+        English-only user never loads it."""
+        models = [self.model]
+        if self.hindi_model and (self.hindi_active or self._hindi_used):
+            models.append(self.hindi_model)
+        for m in models:
             try:
                 requests.post(f"{self.url}/api/generate",
                               json={"model": m, "prompt": "", "keep_alive": self.keep_alive},
@@ -190,6 +196,7 @@ class Cleaner:
                 out = self._generate(self.hindi_model, HINDI_PROMPT, raw, to)
                 out = re.sub(r"\s*/?no_?think\s*$", "", out, flags=re.I).strip()
                 if out and len(out) <= max(600, len(raw) * 5) and not _DEVANAGARI.search(out):
+                    self._hindi_used = True
                     return out
             except Exception as e:
                 print(f"[cleanup] hindi pass failed ({e.__class__.__name__}); trying main model")

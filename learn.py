@@ -42,6 +42,8 @@ class Learner:
         self._english: set[str] = set()
         self._learned: set[str] = set(w.lower() for w in load_learned())
         self._new = False
+        self._pending: list[str] = []          # words added but not yet shown to the user
+        self._lock = threading.Lock()
         threading.Thread(target=self._load_english, daemon=True).start()
 
     def _load_english(self):
@@ -95,9 +97,31 @@ class Learner:
             with open(LEARNED, "a", encoding="utf-8") as f:
                 f.write(w + "\n")
             self._new = True
+            with self._lock:
+                self._pending.append(w)
             print(f"[learn] added {w!r}")
         except OSError:
             pass
+
+    def forget(self, w: str):
+        """Undo: remove a word from learned.txt (and don't re-learn it soon)."""
+        lw = w.lower()
+        self._learned.discard(lw)
+        self._counts[lw] = -99
+        try:
+            lines = load_learned()
+            with open(LEARNED, "w", encoding="utf-8") as f:
+                for x in lines:
+                    if x.lower() != lw:
+                        f.write(x + "\n")
+        except OSError:
+            pass
+        self._new = True
+
+    def pop_pending(self) -> list[str]:
+        with self._lock:
+            p, self._pending = self._pending, []
+        return p
 
     def count(self) -> int:
         return len(self._learned)

@@ -39,9 +39,9 @@ from pynput import keyboard  # noqa: E402
 from recorder import Recorder  # noqa: E402
 from asr import Transcriber  # noqa: E402
 try:
-    from island import Island  # noqa: E402
+    from island import Island, Toast  # noqa: E402
 except Exception as _e:
-    Island = None
+    Island = Toast = None
     print(f"[flow] island unavailable: {_e}")
 from cleanup import Cleaner  # noqa: E402
 import dictionary as dictmod  # noqa: E402
@@ -121,6 +121,7 @@ class App:
             CFG.get("max_glossary_terms", 240),
             CFG.get("keep_model_loaded", True),
             CFG.get("hindi_model", "gemma3:4b"),
+            CFG.get("hindi_script", "devanagari") == "latin",
         )
         self._reload_terms()
         self.learner = None
@@ -323,6 +324,12 @@ class App:
         if self.learner is not None:
             self.learner.set_enabled(on)
 
+    def undo_learned(self, word: str):
+        if self.learner is not None:
+            self.learner.forget(word)
+            self._reload_terms()
+            notify("LocalFlow", f"Removed “{word}” — won’t be re-added")
+
     def copy_last(self):
         if self.last_text:
             subprocess.run(["pbcopy"], input=self.last_text.encode(), check=False)
@@ -447,6 +454,8 @@ def run_app(app: App):
 
     app.start_background()
 
+    app._toast = Toast() if Toast is not None else None
+
     def status_tick():
         try:
             status_item.button().setTitle_(app.status_glyph())
@@ -454,8 +463,14 @@ def run_app(app: App):
             if app.last_text:
                 p = app.last_text.strip()
                 mi_last.setTitle_("Last: " + (p[:40] + "…" if len(p) > 40 else p))
-            if app.learner is not None and app.learner.take_dirty():
-                app._reload_terms()
+            if app.learner is not None:
+                added = app.learner.pop_pending()
+                if added:
+                    app._reload_terms()
+                    if app._toast is not None:
+                        app._toast.show(added[-1], app.undo_learned)
+                elif app.learner.take_dirty():
+                    app._reload_terms()
         except Exception as e:
             print(f"[flow] status_tick: {e}")
 

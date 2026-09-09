@@ -171,6 +171,114 @@ class Island:
             self.view.tick()
 
 
+import objc  # noqa: E402
+from Foundation import NSTimer  # noqa: E402
+
+
+class _ToastTarget(AppKit.NSObject):
+    def initWithToast_(self, toast):
+        self = objc.super(_ToastTarget, self).init()
+        if self is None:
+            return None
+        self._toast = toast
+        return self
+
+    def undo_(self, sender):
+        self._toast._do_undo()
+
+    def dismiss_(self, sender):
+        self._toast.hide()
+
+
+class Toast:
+    """A small transient panel above the island: 'Added "word"'  [Undo]."""
+
+    def __init__(self):
+        self.panel = None
+        self._label = None
+        self._on_undo = None
+        self._word = None
+        self._timer = None
+        self._tgt = _ToastTarget.alloc().initWithToast_(self)
+
+    def _ensure(self):
+        if self.panel is not None:
+            return
+        W, H = 300.0, 40.0
+        style = AppKit.NSWindowStyleMaskBorderless | AppKit.NSWindowStyleMaskNonactivatingPanel
+        p = AppKit.NSPanel.alloc().initWithContentRect_styleMask_backing_defer_(
+            NSMakeRect(0, 0, W, H), style, AppKit.NSBackingStoreBuffered, False)
+        p.setFloatingPanel_(True)
+        p.setLevel_(AppKit.NSScreenSaverWindowLevel)
+        p.setOpaque_(False)
+        p.setBackgroundColor_(AppKit.NSColor.clearColor())
+        p.setHasShadow_(True)
+        p.setReleasedWhenClosed_(False)
+        p.setBecomesKeyOnlyIfNeeded_(True)
+        p.setCollectionBehavior_(_CB)
+
+        bg = AppKit.NSView.alloc().initWithFrame_(NSMakeRect(0, 0, W, H))
+        bg.setWantsLayer_(True)
+        bg.layer().setCornerRadius_(H / 2.0)
+        bg.layer().setBackgroundColor_(
+            _rgba(0.09, 0.09, 0.11, 0.95).CGColor())
+        p.setContentView_(bg)
+
+        lbl = AppKit.NSTextField.labelWithString_("")
+        lbl.setFrame_(NSMakeRect(16, 10, W - 90, 20))
+        lbl.setFont_(AppKit.NSFont.systemFontOfSize_(12))
+        lbl.setTextColor_(AppKit.NSColor.whiteColor())
+        bg.addSubview_(lbl)
+        self._label = lbl
+
+        btn = AppKit.NSButton.alloc().initWithFrame_(NSMakeRect(W - 72, 7, 60, 26))
+        btn.setTitle_("Undo")
+        btn.setBezelStyle_(AppKit.NSBezelStyleRounded)
+        btn.setTarget_(self._tgt)
+        btn.setAction_(b"undo:")
+        bg.addSubview_(btn)
+
+        self.panel = p
+
+    def _position(self):
+        screen = AppKit.NSScreen.mainScreen()
+        if screen is None:
+            return
+        vf = screen.visibleFrame()
+        fr = self.panel.frame()
+        x = vf.origin.x + (vf.size.width - fr.size.width) / 2.0
+        y = vf.origin.y + 16.0 + _H + 10.0     # just above the island's spot
+        self.panel.setFrameOrigin_(NSMakePoint(x, y))
+
+    def show(self, word, on_undo):
+        self._ensure()
+        self._word, self._on_undo = word, on_undo
+        w = word if len(word) <= 24 else word[:23] + "…"
+        self._label.setStringValue_(f'Added  “{w}”  to dictionary')
+        self._position()
+        self.panel.orderFrontRegardless()
+        self.panel.invalidateShadow()
+        if self._timer is not None:
+            self._timer.invalidate()
+        self._timer = NSTimer.scheduledTimerWithTimeInterval_repeats_block_(
+            6.0, False, lambda t: self.hide())
+
+    def _do_undo(self):
+        if self._on_undo and self._word:
+            try:
+                self._on_undo(self._word)
+            except Exception:
+                pass
+        self.hide()
+
+    def hide(self):
+        if self._timer is not None:
+            self._timer.invalidate()
+            self._timer = None
+        if self.panel is not None:
+            self.panel.orderOut_(None)
+
+
 # --- standalone visual demo: python island.py ---
 if __name__ == "__main__":
     app = AppKit.NSApplication.sharedApplication()
