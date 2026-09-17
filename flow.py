@@ -35,6 +35,9 @@ CFG = load_config()
 
 import numpy as np  # noqa: E402
 from pynput import keyboard  # noqa: E402
+from Quartz import (  # noqa: E402
+    CGEventTapEnable, kCGEventTapDisabledByTimeout, kCGEventTapDisabledByUserInput,
+)
 
 from recorder import Recorder  # noqa: E402
 from asr import Transcriber  # noqa: E402
@@ -102,6 +105,26 @@ def resolve_key(name: str):
     if len(name) == 1:
         return keyboard.KeyCode.from_char(name)
     raise ValueError(f"Unknown hotkey in config: {name!r}")
+
+
+class _ResilientKeyListener(keyboard.Listener):
+    """macOS silently disables the low-level event tap a global key listener
+    relies on -- it does this if it judges a callback too slow even once, and
+    also across things like the screen locking, sleep/wake, or another app
+    briefly taking over secure text input (password fields). pynput's macOS
+    backend never notices or re-enables it, so the hotkey just goes dead with
+    no error until the app is relaunched. Catch that disable notification
+    ourselves and turn the tap back on."""
+
+    def _handle_message(self, proxy, event_type, event, refcon, injected):
+        if event_type in (kCGEventTapDisabledByTimeout, kCGEventTapDisabledByUserInput):
+            print(f"[flow] hotkey event tap was disabled by macOS (type={event_type}) — re-enabling")
+            try:
+                CGEventTapEnable(proxy, True)
+            except Exception as e:
+                print(f"[flow] failed to re-enable hotkey event tap: {e}")
+            return
+        return super()._handle_message(proxy, event_type, event, refcon, injected)
 
 
 class App:
@@ -184,7 +207,7 @@ class App:
                     romanize_hindi=(CFG.get("hindi_script", "devanagari") == "latin")),
                 daemon=True,
             ).start()
-        self._listener = keyboard.Listener(on_press=self._on_press, on_release=self._on_release)
+        self._listener = _ResilientKeyListener(on_press=self._on_press, on_release=self._on_release)
         self._listener.start()
         if self.learner is not None and CFG.get("learn_words", False):
             self.learner.set_enabled(True)
