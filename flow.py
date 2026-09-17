@@ -120,6 +120,17 @@ class App:
         self._press_t = 0.0
         self._release_timer = None
         self.mode = CFG.get("mode", "hold_or_lock")
+        # chord guard: keys other than the hotkey currently held down, so a
+        # bare-modifier hotkey (e.g. Option) doesn't fire when it's actually
+        # part of someone else's shortcut (Cmd+Option+Esc, Option+Tab, ...)
+        self._other_down = set()
+        self._chord = False
+        # if a transcription ever gets stuck, either the island's × button or
+        # the last-resort watchdog in status_tick() abandons it by bumping
+        # this id, so a late/never-ending result can't clobber fresh state or
+        # paste stale text
+        self._work_job_id = 0
+        self._work_started_at = 0.0
 
         self.rec = Recorder(CFG.get("sample_rate", 16000))
         self.cleaner = Cleaner(
@@ -145,7 +156,8 @@ class App:
         self.island = None
         if CFG.get("island", True) and Island is not None:
             try:
-                self.island = Island(lambda: (self.state, *self.rec.snapshot()))
+                self.island = Island(lambda: (self.state, *self.rec.snapshot()),
+                                     on_cancel=self.cancel_current)
             except Exception as e:
                 print(f"[flow] island init failed: {e}")
 
@@ -201,18 +213,32 @@ class App:
         if self.learner is not None and self.learner.enabled:
             self.learner.feed(key)
         if key != self._hotkey:
+            self._other_down.add(key)
+            # the hotkey is already down and a *different* key just landed
+            # right after it -> this is a keyboard shortcut, not a dictation
+            # tap. Bail out before any real speech could have been captured.
+            guard = CFG.get("chord_guard_ms", 200) / 1000.0
+            if (self._hotkey_down and not self._chord
+                    and time.time() - self._press_t < guard):
+                self._abort_as_chord()
             return
+        if self._hotkey_down:
+            return  # OS key-repeat while already held
+        self._hotkey_down = True
+        self._press_t = time.time()
+        if self._other_down:
+            # some other key was already held when the hotkey landed on top
+            # of it -> also a shortcut, not a bare hotkey tap
+            self._chord = True
+            return
+        self._chord = False
         m = self.mode
         if m == "push_to_talk":
-            if self._hotkey_down:
-                return
-            self._hotkey_down = True
             self._begin()
         elif m == "toggle":
             self._toggle_on = not self._toggle_on
             self._begin() if self._toggle_on else self._end()
         else:  # hold_or_lock
-            self._hotkey_down = True
             if self._locked:
                 self._locked = False
                 self._end()
@@ -222,20 +248,30 @@ class App:
                 # tap of a double-tap: lock hands-free
                 self._locked = True
                 return
-            self._press_t = time.time()
             self._begin()
+
+    def _abort_as_chord(self):
+        self._chord = True
+        self._cancel_release_timer()
+        self._locked = False
+        if self.state == "rec":
+            self.rec.stop()
+            self.state = "idle"
 
     def _on_release(self, key):
         if key != self._hotkey:
+            self._other_down.discard(key)
+            return
+        self._hotkey_down = False
+        if self._chord:
+            self._chord = False
             return
         m = self.mode
         if m == "push_to_talk":
-            self._hotkey_down = False
             self._end()
         elif m == "toggle":
             pass
         else:  # hold_or_lock
-            self._hotkey_down = False
             if self._locked or self.state != "rec":
                 return
             if time.time() - self._press_t < 0.35:
@@ -280,12 +316,14 @@ class App:
             self.state = "idle"
             return
         self.state = "work"
-        self._jobs.put(audio)
+        self._work_job_id += 1
+        self._work_started_at = time.time()
+        self._jobs.put((self._work_job_id, audio))
 
     # ---------- pipeline worker ----------
     def _worker(self):
         while True:
-            audio = self._jobs.get()
+            job_id, audio = self._jobs.get()
             try:
                 if self.asr is None:
                     continue
@@ -309,25 +347,64 @@ class App:
                     text += " "
                 print(f"[flow] raw={raw!r}")
                 print(f"[flow] out={text!r}  (asr {t1-t0:.2f}s, clean {t2-t1:.2f}s)")
+                if job_id != self._work_job_id:
+                    # the watchdog already gave up on this job and reset the
+                    # UI -> don't paste a stale result into whatever the user
+                    # is doing now
+                    print(f"[flow] job {job_id} finished after being abandoned — discarding")
+                    continue
                 if text:
                     self.last_text = text
-                    if usage is not None:
-                        try:
-                            usage.record(text)
-                        except Exception:
-                            pass
                     if CFG.get("auto_paste", True):
                         inserter.paste_text(text)
                     else:
                         subprocess.run(["pbcopy"], input=text.encode(), check=False)
+                    if usage is not None:
+                        try:
+                            latency_ms = (time.time() - self._work_started_at) * 1000.0
+                            usage.record(text, latency_ms=latency_ms)
+                        except Exception:
+                            pass
                     play("done")
                 else:
                     play("error")
             except Exception as e:
                 print(f"[flow] pipeline error: {e}")
-                play("error")
+                if job_id == self._work_job_id:
+                    play("error")
             finally:
-                self.state = "idle"
+                if job_id == self._work_job_id:
+                    self.state = "idle"
+
+    def _abandon_stuck_job(self):
+        """Last-resort watchdog: called from the main-thread status timer if a
+        transcription has been running far longer than any legitimate one
+        should (see work_timeout_seconds). The island's × button is the fast,
+        manual way to do the same thing sooner."""
+        print(f"[flow] transcription stuck for >{CFG.get('work_timeout_seconds', 300)}s — recovering")
+        self._work_job_id += 1
+        self.state = "idle"
+        notify("LocalFlow", "Transcription got stuck and was cancelled — try again")
+        play("error")
+
+    def cancel_current(self):
+        """Manual kill switch (the island's × button): abort whatever is
+        running right now -- a recording in progress, or a stuck/slow
+        transcription -- and go straight back to idle."""
+        self._cancel_release_timer()
+        self._locked = False
+        self._hotkey_down = False
+        self._chord = False
+        if self.state == "rec":
+            print("[flow] recording cancelled by user")
+            self.rec.stop()
+            self.state = "idle"
+            play("error")
+        elif self.state == "work":
+            print("[flow] transcription cancelled by user")
+            self._work_job_id += 1
+            self.state = "idle"
+            play("error")
 
     # ---------- menu actions ----------
     def reload_dict(self):
@@ -484,6 +561,10 @@ def run_app(app: App):
 
     def status_tick():
         try:
+            if app.state == "work":
+                timeout = CFG.get("work_timeout_seconds", 300)
+                if timeout > 0 and time.time() - app._work_started_at > timeout:
+                    app._abandon_stuck_job()
             status_item.button().setTitle_(app.status_glyph())
             mi_status.setTitle_(app.status_label())
             if app.last_text:

@@ -17,7 +17,7 @@ _lock = threading.Lock()
 
 
 # ---------------- data ----------------
-def record(text: str):
+def record(text: str, latency_ms: float | None = None):
     text = (text or "").strip()
     if not text:
         return
@@ -25,21 +25,27 @@ def record(text: str):
     now = time.time()
     with _lock:
         try:
+            entry = {"t": now, "w": words, "c": len(text), "text": text[:2000]}
+            if latency_ms is not None:
+                entry["ms"] = round(latency_ms)
             with open(HISTORY, "a", encoding="utf-8") as f:
-                f.write(json.dumps({"t": now, "w": words, "c": len(text),
-                                    "text": text[:2000]}, ensure_ascii=False) + "\n")
+                f.write(json.dumps(entry, ensure_ascii=False) + "\n")
         except OSError:
             pass
-        _bump_stats(words, len(text), now)
+        _bump_stats(words, len(text), now, latency_ms)
         _maybe_trim()
 
 
-def _bump_stats(words, chars, now):
+def _bump_stats(words, chars, now, latency_ms=None):
     s = _read_stats()
     s["total_words"] = s.get("total_words", 0) + words
     s["total_chars"] = s.get("total_chars", 0) + chars
     s["total_dictations"] = s.get("total_dictations", 0) + 1
     s.setdefault("first_use", now)
+    if latency_ms is not None:
+        s["latency_sum_ms"] = s.get("latency_sum_ms", 0) + latency_ms
+        s["latency_count"] = s.get("latency_count", 0) + 1
+        s["last_latency_ms"] = latency_ms
     try:
         with open(STATS, "w", encoding="utf-8") as f:
             json.dump(s, f)
@@ -106,6 +112,11 @@ def summary() -> dict:
     total_words = s.get("total_words") or sum(e.get("w", 0) for e in entries)
     total_dict = s.get("total_dictations") or len(entries)
     first = s.get("first_use")
+
+    latency_count = s.get("latency_count", 0)
+    avg_latency_ms = (s["latency_sum_ms"] / latency_count) if latency_count else None
+    last_latency_ms = s.get("last_latency_ms")
+
     return {
         "total_words": total_words,
         "total_dictations": total_dict,
@@ -114,6 +125,8 @@ def summary() -> dict:
         "today_words": days.get(today, 0),
         "week_words": week_words,
         "first_use": first,
+        "avg_latency_ms": avg_latency_ms,
+        "last_latency_ms": last_latency_ms,
         "recent": list(reversed(entries))[:80],
     }
 
@@ -212,11 +225,15 @@ class UsageWindow:
         first = ""
         if s.get("first_use"):
             first = "  ·  since " + _dt.date.fromtimestamp(s["first_use"]).strftime("%b %-d, %Y")
+        speed = ""
+        if s.get("avg_latency_ms") is not None:
+            speed = (f"\navg transcription time {s['avg_latency_ms']/1000:.1f}s"
+                     f"   ·   last {s['last_latency_ms']/1000:.1f}s")
         self._stat.setStringValue_(
             f"{s['total_words']:,} words   ·   {s['total_dictations']:,} dictations   ·   "
             f"{s['streak']}-day streak\n"
             f"{s['today_words']:,} words today   ·   {s['week_words']:,} this week   ·   "
-            f"used on {s['days_used']} day(s){first}")
+            f"used on {s['days_used']} day(s){first}{speed}")
         lines = []
         for e in s["recent"]:
             ts = _dt.datetime.fromtimestamp(e.get("t", 0)).strftime("%b %-d  %H:%M")

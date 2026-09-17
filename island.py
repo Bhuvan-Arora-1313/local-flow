@@ -10,9 +10,12 @@ import numpy as np
 import AppKit
 from Foundation import NSMakeRect, NSMakePoint
 
-_W, _H = 96.0, 24.0
 _PAD_X, _PAD_Y = 10.0, 5.0
 _BAR_W = 2.0
+_BTN_D = 16.0            # the cancel (x) button
+_BTN_MARGIN = 4.0
+_CONTENT_X0 = _BTN_MARGIN + _BTN_D + 6.0   # waveform area starts after the button
+_W, _H = 96.0 + _CONTENT_X0 - _PAD_X, 24.0
 
 _CB = (
     (1 << 0)   # CanJoinAllSpaces
@@ -32,10 +35,39 @@ class WaveView(AppKit.NSView):
         if self is None:
             return None
         self.provider = None
+        self.on_cancel = None
         self.state = "idle"
         self.disp = None
+        self._hover = False
         self._t0 = time.time()
+        self._btn_rect = NSMakeRect(_BTN_MARGIN, (_H - _BTN_D) / 2.0, _BTN_D, _BTN_D)
+        try:
+            self.addTrackingArea_(
+                AppKit.NSTrackingArea.alloc().initWithRect_options_owner_userInfo_(
+                    self._btn_rect,
+                    AppKit.NSTrackingMouseEnteredAndExited | AppKit.NSTrackingActiveAlways,
+                    self, None))
+        except Exception:
+            pass
         return self
+
+    # ---- the cancel (x) button ----
+    def mouseEntered_(self, event):
+        self._hover = True
+        self.setNeedsDisplay_(True)
+
+    def mouseExited_(self, event):
+        self._hover = False
+        self.setNeedsDisplay_(True)
+
+    def mouseDown_(self, event):
+        p = self.convertPoint_fromView_(event.locationInWindow(), None)
+        if self.on_cancel is not None and AppKit.NSPointInRect(p, self._btn_rect):
+            try:
+                self.on_cancel()
+            except Exception:
+                pass
+        # swallow the click either way -- this pill has nothing else to click
 
     # ---- driven from the main-thread timer ----
     def tick(self):
@@ -74,17 +106,34 @@ class WaveView(AppKit.NSView):
             self._draw_working(b)
         else:
             self._draw_bars(b)
+        if self.on_cancel is not None:
+            self._draw_cancel_button()
+
+    def _draw_cancel_button(self):
+        r = self._btn_rect
+        _rgba(1, 1, 1, 0.22 if self._hover else 0.12).setFill()
+        AppKit.NSBezierPath.bezierPathWithOvalInRect_(r).fill()
+        cx, cy = r.origin.x + r.size.width / 2.0, r.origin.y + r.size.height / 2.0
+        d = 3.2
+        cross = AppKit.NSBezierPath.bezierPath()
+        cross.setLineWidth_(1.3)
+        cross.moveToPoint_(NSMakePoint(cx - d, cy - d))
+        cross.lineToPoint_(NSMakePoint(cx + d, cy + d))
+        cross.moveToPoint_(NSMakePoint(cx - d, cy + d))
+        cross.lineToPoint_(NSMakePoint(cx + d, cy - d))
+        _rgba(0.96, 0.98, 1.0, 0.85 if self._hover else 0.55).setStroke()
+        cross.stroke()
 
     def _draw_bars(self, b):
         d = self.disp if self.disp is not None else np.zeros(16)
         n = len(d)
-        area_w = b.size.width - 2 * _PAD_X
+        area_w = b.size.width - _CONTENT_X0 - _PAD_X
         gap = max(1.5, (area_w - _BAR_W * n) / (n - 1)) if n > 1 else 0.0
         max_h = b.size.height - 2 * _PAD_Y
         mid_y = b.size.height / 2.0
         for i, v in enumerate(d):
             h = 1.5 + float(np.clip(v, 0, 1)) * max_h
-            x = _PAD_X + i * (_BAR_W + gap)
+            x = _CONTENT_X0 + i * (_BAR_W + gap)
             r = NSMakeRect(x, mid_y - h / 2.0, _BAR_W, h)
             path = AppKit.NSBezierPath.bezierPathWithRoundedRect_xRadius_yRadius_(
                 r, _BAR_W / 2.0, _BAR_W / 2.0
@@ -95,7 +144,8 @@ class WaveView(AppKit.NSView):
 
     def _draw_working(self, b):
         t = time.time() - self._t0
-        cx, cy = b.size.width / 2.0, b.size.height / 2.0
+        cx = _CONTENT_X0 + (b.size.width - _CONTENT_X0 - _PAD_X) / 2.0
+        cy = b.size.height / 2.0
         for i in (-1, 0, 1):
             ph = 0.5 + 0.5 * math.sin(t * 5.0 + i * 1.1)
             r = 1.6 + 1.6 * ph
@@ -107,8 +157,9 @@ class WaveView(AppKit.NSView):
 
 
 class Island:
-    def __init__(self, provider):
+    def __init__(self, provider, on_cancel=None):
         self.provider = provider
+        self.on_cancel = on_cancel
         self.panel = None
         self.view = None
         self._visible = False
@@ -127,12 +178,15 @@ class Island:
         panel.setOpaque_(False)
         panel.setBackgroundColor_(AppKit.NSColor.clearColor())
         panel.setHasShadow_(True)
-        panel.setIgnoresMouseEvents_(True)
+        # a cancel button needs real clicks; without one, keep the pill fully
+        # click-through like before
+        panel.setIgnoresMouseEvents_(self.on_cancel is None)
         panel.setReleasedWhenClosed_(False)
         panel.setBecomesKeyOnlyIfNeeded_(True)
         panel.setCollectionBehavior_(_CB)
         view = WaveView.alloc().initWithFrame_(rect)
         view.provider = self.provider
+        view.on_cancel = self.on_cancel
         panel.setContentView_(view)
         self.panel, self.view = panel, view
 

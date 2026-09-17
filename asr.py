@@ -12,18 +12,60 @@ import numpy as np
 
 
 class _ParakeetBackend:
+    # A single non-chunked pass costs more than linear time/memory in audio
+    # length (the conformer encoder's self-attention), so a long or runaway
+    # recording can turn into a multi-minute decode that looks like a hang
+    # and pins the GPU. Past CHUNK_S, split it the same way the library's own
+    # file-based .transcribe(chunk_duration=...) does for long files.
+    CHUNK_S = 45.0
+    OVERLAP_S = 8.0
+
     def __init__(self, model_id: str, sample_rate: int, language: str = "auto"):
         import mlx.core as mx
         from parakeet_mlx import from_pretrained
         from parakeet_mlx.audio import get_logmel
+        from parakeet_mlx.alignment import (
+            merge_longest_common_subsequence, merge_longest_contiguous,
+            sentences_to_result, tokens_to_sentences,
+        )
         self._mx = mx
         self._get_logmel = get_logmel
+        self._merge_contiguous = merge_longest_contiguous
+        self._merge_lcs = merge_longest_common_subsequence
+        self._tokens_to_sentences = tokens_to_sentences
+        self._sentences_to_result = sentences_to_result
         self.model = from_pretrained(model_id)
         self.sample_rate = int(getattr(self.model.preprocessor_config, "sample_rate", sample_rate))
 
     def transcribe(self, audio: np.ndarray, prompt: str = "") -> str:
-        mel = self._get_logmel(self._mx.array(audio), self.model.preprocessor_config)
-        return self.model.generate(mel)[0].text.strip()
+        if len(audio) / self.sample_rate <= self.CHUNK_S:
+            mel = self._get_logmel(self._mx.array(audio), self.model.preprocessor_config)
+            return self.model.generate(mel)[0].text.strip()
+
+        chunk_n = int(self.CHUNK_S * self.sample_rate)
+        overlap_n = int(self.OVERLAP_S * self.sample_rate)
+        hop = self.model.preprocessor_config.hop_length
+        all_tokens = []
+        for start in range(0, len(audio), chunk_n - overlap_n):
+            end = min(start + chunk_n, len(audio))
+            if end - start < hop:
+                break
+            mel = self._get_logmel(self._mx.array(audio[start:end]), self.model.preprocessor_config)
+            chunk_tokens = self.model.generate(mel)[0].tokens
+            offset = start / self.sample_rate
+            for tok in chunk_tokens:
+                tok.start += offset
+                tok.end = tok.start + tok.duration
+            if all_tokens:
+                try:
+                    all_tokens = self._merge_contiguous(
+                        all_tokens, chunk_tokens, overlap_duration=self.OVERLAP_S)
+                except RuntimeError:
+                    all_tokens = self._merge_lcs(
+                        all_tokens, chunk_tokens, overlap_duration=self.OVERLAP_S)
+            else:
+                all_tokens = chunk_tokens
+        return self._sentences_to_result(self._tokens_to_sentences(all_tokens)).text.strip()
 
 
 class _WhisperBackend:
