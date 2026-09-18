@@ -98,6 +98,11 @@ def play(kind: str):
             pass
 
 
+# how long a key not equal to the hotkey is allowed to count as "held" for
+# chord detection before it's assumed to be a leaked/missed-release entry
+_OTHER_KEY_TTL = 5.0
+
+
 def resolve_key(name: str):
     name = name.strip().lower()
     if hasattr(keyboard.Key, name):
@@ -145,8 +150,13 @@ class App:
         self.mode = CFG.get("mode", "hold_or_lock")
         # chord guard: keys other than the hotkey currently held down, so a
         # bare-modifier hotkey (e.g. Option) doesn't fire when it's actually
-        # part of someone else's shortcut (Cmd+Option+Esc, Option+Tab, ...)
-        self._other_down = set()
+        # part of someone else's shortcut (Cmd+Option+Esc, Option+Tab, ...).
+        # Maps key -> press time, NOT a plain set: a global listener can miss
+        # a release event for some unrelated key pressed in another app, and
+        # a permanently "stuck" entry would otherwise gate the hotkey off
+        # forever. Entries older than _OTHER_KEY_TTL are treated as stale
+        # bookkeeping, not a real held key, so this self-heals.
+        self._other_down = {}
         self._chord = False
         # if a transcription ever gets stuck, either the island's × button or
         # the last-resort watchdog in status_tick() abandons it by bumping
@@ -232,11 +242,18 @@ class App:
                 self.state = "error"
 
     # ---------- hotkey ----------
+    def _other_key_held(self) -> bool:
+        now = time.time()
+        stale = [k for k, t in self._other_down.items() if now - t > _OTHER_KEY_TTL]
+        for k in stale:
+            del self._other_down[k]
+        return bool(self._other_down)
+
     def _on_press(self, key):
         if self.learner is not None and self.learner.enabled:
             self.learner.feed(key)
         if key != self._hotkey:
-            self._other_down.add(key)
+            self._other_down[key] = time.time()
             # the hotkey is already down and a *different* key just landed
             # right after it -> this is a keyboard shortcut, not a dictation
             # tap. Bail out before any real speech could have been captured.
@@ -249,7 +266,7 @@ class App:
             return  # OS key-repeat while already held
         self._hotkey_down = True
         self._press_t = time.time()
-        if self._other_down:
+        if self._other_key_held():
             # some other key was already held when the hotkey landed on top
             # of it -> also a shortcut, not a bare hotkey tap
             self._chord = True
@@ -283,7 +300,7 @@ class App:
 
     def _on_release(self, key):
         if key != self._hotkey:
-            self._other_down.discard(key)
+            self._other_down.pop(key, None)
             return
         self._hotkey_down = False
         if self._chord:
@@ -409,6 +426,18 @@ class App:
         self.state = "idle"
         notify("LocalFlow", "Transcription got stuck and was cancelled — try again")
         play("error")
+
+    def _resync_hotkey_state(self):
+        """Belt-and-suspenders watchdog: a missed key event anywhere in the
+        press/release bookkeeping should self-heal, not leave the hotkey
+        permanently unresponsive until the app is relaunched. If we think the
+        hotkey is held down but haven't actually been recording/working for
+        a while, that's a stale flag, not a real hold -- clear it."""
+        if (self._hotkey_down and self.state not in ("rec", "work")
+                and time.time() - self._press_t > 2.0):
+            print("[flow] hotkey bookkeeping looked stuck (down but idle) — resyncing")
+            self._hotkey_down = False
+            self._chord = False
 
     def cancel_current(self):
         """Manual kill switch (the island's × button): abort whatever is
@@ -588,6 +617,7 @@ def run_app(app: App):
                 timeout = CFG.get("work_timeout_seconds", 300)
                 if timeout > 0 and time.time() - app._work_started_at > timeout:
                     app._abandon_stuck_job()
+            app._resync_hotkey_state()
             status_item.button().setTitle_(app.status_glyph())
             mi_status.setTitle_(app.status_label())
             if app.last_text:
