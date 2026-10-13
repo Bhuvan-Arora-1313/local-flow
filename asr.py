@@ -92,7 +92,21 @@ class _WhisperBackend:
 
 
 class Transcriber:
+    # MLX's allocator keeps freed GPU buffers around for reuse instead of
+    # returning them to the OS, bucketed by size. Real dictations/meeting
+    # chunks are all different lengths, so over a day of varied use this
+    # cache keeps growing (we measured ~5GB from a couple hundred calls with
+    # no cap, climbing further the longer the process runs) until the app
+    # has to be killed. Capping it keeps RSS flat with no measurable latency
+    # cost -- it just reuses whatever's within the cap instead of hoarding.
+    MLX_CACHE_LIMIT_MB = 512
+
     def __init__(self, model_id: str, sample_rate: int = 16000, language: str = "auto"):
+        try:
+            import mlx.core as mx
+            mx.set_cache_limit(self.MLX_CACHE_LIMIT_MB * 1024 * 1024)
+        except Exception as e:
+            print(f"[asr] couldn't set MLX cache limit: {e}")
         self.model_id = model_id
         t0 = time.time()
         BE = _WhisperBackend if "whisper" in model_id.lower() else _ParakeetBackend
