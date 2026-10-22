@@ -47,11 +47,42 @@ SCRIPT_DEVANAGARI = """- If the speaker mixes languages (e.g. Hinglish - Hindi +
 every word in the language and script they used (Devanagari stays Devanagari, romanised Hindi stays \
 romanised); only fix obvious spelling/spacing."""
 
-SCRIPT_LATIN = """SCRIPT: the transcript may contain Hindi (Devanagari or already-romanised). Output \
-ALL Hindi as casual ROMANISED Hindi - Latin letters, chat/WhatsApp style, NO diacritics, NOT an \
-English translation. "मैं ठीक हूँ" -> "main theek hoon"; "क्या हो रहा है" -> "kya ho raha hai". Keep \
-English words as English. The EDIT rules above (repetition, fillers, stray commas) still apply to the \
-Hindi parts too."""
+# A dedicated, narrow prompt for code-mixed English+romanised-Hindi dictation.
+# The general SYSTEM_PROMPT above buries "don't translate" under five other
+# edit rules and an all-English worked example; in testing, general-purpose
+# local models (qwen3:8b, gemma3:4b) reliably translated Hindi to English
+# anyway despite being told not to in that combined prompt. Pulling the
+# "never translate,
+# preserve each word's language" rule out as the FIRST, only-topic instruction
+# with its own Hinglish example fixes that completely for the main cleanup
+# model (no separate smaller model needed) -- verified directly before this
+# was wired in.
+HINGLISH_SYSTEM_PROMPT = """You clean up a dictated transcript that code-mixes English and romanised \
+Hindi (Hindi written in Latin letters, not Devanagari) in the same sentence, the way people actually \
+speak it.
+
+RULE 1 - MOST IMPORTANT: Never translate a word from one language to the other, for any reason, even \
+if it seems more natural. Whatever language the speaker said a word in, output that exact word in that \
+same language. A Hindi word stays Hindi (romanised); an English word stays English. You are editing \
+for clarity, not translating.
+
+Other edits:
+2. Repetition: delete repeated words/phrases from the speaker thinking out loud.
+3. Fillers: delete "um", "uh", "you know", "like", filler "matlab"/"basically", stutters and false \
+starts (keep the final corrected version of a self-correction).
+4. Punctuation: fix stray commas, capitalise sentences, split run-ons.
+5. Spelling: fix inconsistent/garbled romanised-Hindi spelling to one natural, readable spelling \
+(e.g. "mujhey"/"mujhe" -> pick one), and fix obvious misheard words. The GLOSSARY is the source of \
+truth for names/products/jargon spelling.
+{LIST_RULES}
+
+Do not add, remove, paraphrase, summarise, or answer a question in the text.
+
+Return ONLY the cleaned transcript - no preamble, no quotes, no notes.
+
+Example:
+IN: so um mujhe mujhe kal office jana hai and uh i need to complete this task before leaving
+OUT: Mujhe kal office jana hai and I need to complete this task before leaving."""
 
 LIST_RULES_ON = """- LISTS - this matters, do it: when the speaker enumerates items, output them as a real \
 list, each item on its OWN line.
@@ -193,24 +224,31 @@ class Cleaner:
             return raw
         to = _timeout or self.timeout
 
-        # Hindi -> Roman: dedicated small-model transliteration pass (small models
-        # translate instead of transliterate if asked to do anything else).
+        # Hindi -> Roman: if the ASR still emitted Devanagari (normally it
+        # shouldn't once primed to output romanised Hinglish directly -- see
+        # asr.py), get it into Latin script first with the dedicated small
+        # model (small models translate instead of transliterate if asked to
+        # do anything else), then still run the full cleanup pass below --
+        # fillers/repeats/punctuation apply to Hinglish text too.
         if romanize_hindi and self.hindi_model and _DEVANAGARI.search(raw):
             try:
                 out = self._generate(self.hindi_model, HINDI_PROMPT, raw, to)
                 out = re.sub(r"\s*/?no_?think\s*$", "", out, flags=re.I).strip()
                 if out and len(out) <= max(600, len(raw) * 5) and not _DEVANAGARI.search(out):
                     self._hindi_used = True
-                    return out
+                    raw = out
             except Exception as e:
                 print(f"[cleanup] hindi pass failed ({e.__class__.__name__}); trying main model")
 
         gl = select_glossary(glossary, self.max_glossary_terms)
         gloss = ", ".join(gl) if gl else "(none provided)"
-        system = SYSTEM_PROMPT.replace(
-            "{LIST_RULES}", LIST_RULES_ON if smart_format else LIST_RULES_OFF
-        ).replace(
-            "{SCRIPT_RULE}", SCRIPT_LATIN if romanize_hindi else SCRIPT_DEVANAGARI)
+        if romanize_hindi:
+            system = HINGLISH_SYSTEM_PROMPT.replace(
+                "{LIST_RULES}", LIST_RULES_ON if smart_format else LIST_RULES_OFF)
+        else:
+            system = SYSTEM_PROMPT.replace(
+                "{LIST_RULES}", LIST_RULES_ON if smart_format else LIST_RULES_OFF
+            ).replace("{SCRIPT_RULE}", SCRIPT_DEVANAGARI)
         # Stable prefix (glossary) first, variable part (transcript) last -> Ollama
         # reuses the KV cache across dictations.
         user = f"GLOSSARY:\n{gloss}\n\nRAW_TRANSCRIPT:\n{raw}\n\n/no_think"

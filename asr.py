@@ -20,7 +20,8 @@ class _ParakeetBackend:
     CHUNK_S = 45.0
     OVERLAP_S = 8.0
 
-    def __init__(self, model_id: str, sample_rate: int, language: str = "auto"):
+    def __init__(self, model_id: str, sample_rate: int, language: str = "auto",
+                 romanize_hindi: bool = False):
         import mlx.core as mx
         from parakeet_mlx import from_pretrained
         from parakeet_mlx.audio import get_logmel
@@ -69,14 +70,26 @@ class _ParakeetBackend:
 
 
 class _WhisperBackend:
-    def __init__(self, model_id: str, sample_rate: int, language: str = "auto"):
+    # Whisper has no real "output script" switch, but it takes the style of
+    # whatever initial_prompt you give it -- primed with a romanized-Hindi
+    # example, it decodes code-mixed speech directly as romanized Hinglish
+    # in one pass, instead of Devanagari that a separate LLM pass then has
+    # to transliterate (that second pass was the actual source of garbled
+    # spelling and outright mistranslation reported with hindi_script=latin).
+    HINGLISH_PRIMER = "Mujhe kal office jana hai aur meeting attend karni hai, kyunki kaafi important hai."
+
+    def __init__(self, model_id: str, sample_rate: int, language: str = "auto",
+                 romanize_hindi: bool = False):
         import mlx_whisper
         self._mw = mlx_whisper
         self.model_id = model_id
         self.sample_rate = 16000
         self.language = (language or "auto").lower()
+        self.romanize_hindi = romanize_hindi
 
     def transcribe(self, audio: np.ndarray, prompt: str = "") -> str:
+        if self.romanize_hindi:
+            prompt = f"{self.HINGLISH_PRIMER} {prompt}".strip() if prompt else self.HINGLISH_PRIMER
         if prompt and len(prompt) > 800:            # Whisper prompt is ~224 tokens
             prompt = prompt[:800].rsplit(",", 1)[0]
         lang = None if self.language in ("auto", "", "detect") else self.language
@@ -101,7 +114,8 @@ class Transcriber:
     # cost -- it just reuses whatever's within the cap instead of hoarding.
     MLX_CACHE_LIMIT_MB = 512
 
-    def __init__(self, model_id: str, sample_rate: int = 16000, language: str = "auto"):
+    def __init__(self, model_id: str, sample_rate: int = 16000, language: str = "auto",
+                 romanize_hindi: bool = False):
         try:
             import mlx.core as mx
             mx.set_cache_limit(self.MLX_CACHE_LIMIT_MB * 1024 * 1024)
@@ -110,7 +124,7 @@ class Transcriber:
         self.model_id = model_id
         t0 = time.time()
         BE = _WhisperBackend if "whisper" in model_id.lower() else _ParakeetBackend
-        self.backend = BE(model_id, sample_rate, language)
+        self.backend = BE(model_id, sample_rate, language, romanize_hindi)
         self.sample_rate = self.backend.sample_rate
         try:
             self.transcribe(np.zeros(self.sample_rate // 2, dtype=np.float32))

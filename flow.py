@@ -227,7 +227,8 @@ class App:
         for attempt in (1, 2):
             try:
                 self.asr = Transcriber(CFG["asr_model"], CFG.get("sample_rate", 16000),
-                                       CFG.get("asr_language", "auto"))
+                                       CFG.get("asr_language", "auto"),
+                                       romanize_hindi=(CFG.get("hindi_script", "devanagari") == "latin"))
                 self.rec.sample_rate = self.asr.sample_rate
                 self.state = "idle"
                 return
