@@ -42,9 +42,9 @@ from Quartz import (  # noqa: E402
 from recorder import Recorder  # noqa: E402
 from asr import Transcriber  # noqa: E402
 try:
-    from island import Island, Toast  # noqa: E402
+    from island import Island, Toast, GhostText  # noqa: E402
 except Exception as _e:
-    Island = Toast = None
+    Island = Toast = GhostText = None
     print(f"[flow] island unavailable: {_e}")
 from cleanup import Cleaner  # noqa: E402
 import dictionary as dictmod  # noqa: E402
@@ -141,6 +141,10 @@ class App:
         self.last_text = ""
         self.cleanup_on = CFG.get("cleanup_enabled", True)
         self._jobs: queue.Queue = queue.Queue()
+        # the ASR model is one MLX/Metal object; the hold-to-talk pipeline and
+        # a running meeting transcription must never call into it at once
+        self._asr_lock = threading.Lock()
+        self.meeting = None
         self._hotkey = resolve_key(CFG["hotkey"])
         self._hotkey_down = False
         self._toggle_on = False
@@ -193,6 +197,13 @@ class App:
                                      on_cancel=self.cancel_current)
             except Exception as e:
                 print(f"[flow] island init failed: {e}")
+
+        # live "ghost" preview while speaking: not true word-by-word streaming,
+        # a periodic re-transcription of the growing recording so far, shown
+        # faded above the island and cleared the instant you stop
+        self.ghost = GhostText() if CFG.get("ghost_text", True) and GhostText is not None else None
+        self._ghost_text = ""
+        self._ghost_busy = False
 
     def _reload_terms(self):
         terms, self.corrections = dictmod.load(DICT_PATH)
@@ -337,16 +348,56 @@ class App:
             return
         self._end()
 
+    # cap how much audio a single ghost preview re-transcribes: re-decoding
+    # the WHOLE recording every tick gets slower the longer you talk, and can
+    # make the real, final transcription (which shares the GPU/lock) queue up
+    # behind an in-flight ghost call right when you release the key. A recent
+    # sliding window keeps every ghost tick roughly the same, fast cost
+    # regardless of how long the dictation runs.
+    GHOST_WINDOW_SECONDS = 10.0
+
     def _begin(self):
         if self.state != "idle":
             return
         self.state = "rec"
+        self._ghost_text = ""
         try:
             self.rec.start()
             play("start")
+            if self.ghost is not None:
+                # don't wait for the next periodic tick (up to
+                # ghost_text_interval_seconds away) for the first preview
+                t = threading.Timer(0.35, self._ghost_tick)
+                t.daemon = True
+                t.start()
         except Exception as e:
             print(f"[flow] mic start failed: {e}")
             self.state = "idle"
+
+    def _ghost_tick(self):
+        """Kick off one live-preview re-transcription, if one isn't already
+        running and there's enough new audio to bother with."""
+        if self.ghost is None or self.state != "rec" or self.asr is None or self._ghost_busy:
+            return
+        audio = self.rec.audio_so_far()
+        if len(audio) < self.asr.sample_rate // 2:   # < 0.5s isn't worth it yet
+            return
+        window = int(self.GHOST_WINDOW_SECONDS * self.asr.sample_rate)
+        if len(audio) > window:
+            audio = audio[-window:]
+        self._ghost_busy = True
+        threading.Thread(target=self._ghost_transcribe, args=(audio,), daemon=True).start()
+
+    def _ghost_transcribe(self, audio):
+        try:
+            with self._asr_lock:
+                text = self.asr.transcribe(audio, prompt=", ".join(self.terms))
+            if self.state == "rec":    # don't show a stale guess after you've stopped
+                self._ghost_text = text.strip()
+        except Exception as e:
+            print(f"[flow] ghost preview failed: {e}")
+        finally:
+            self._ghost_busy = False
 
     def _end(self):
         if self.state != "rec":
@@ -369,7 +420,8 @@ class App:
                 if self.asr is None:
                     continue
                 t0 = time.time()
-                raw = self.asr.transcribe(audio, prompt=", ".join(self.terms))
+                with self._asr_lock:
+                    raw = self.asr.transcribe(audio, prompt=", ".join(self.terms))
                 t1 = time.time()
                 text = dictmod.collapse_repeats(raw)
                 text = dictmod.tidy_commas(text)
@@ -644,9 +696,26 @@ def run_app(app: App):
         except Exception:
             pass
 
+    def ghost_tick():
+        if app.ghost is None:
+            return
+        try:
+            if app.state == "rec":
+                if not app.ghost._visible:
+                    app.ghost.show()
+                app.ghost.set_text(app._ghost_text)
+            elif app.ghost._visible:
+                app.ghost.hide()
+        except Exception:
+            pass
+
     NSTimer.scheduledTimerWithTimeInterval_repeats_block_(0.25, True, lambda t: status_tick())
     if app.island is not None:
         NSTimer.scheduledTimerWithTimeInterval_repeats_block_(1 / 30.0, True, lambda t: island_tick())
+    if app.ghost is not None:
+        NSTimer.scheduledTimerWithTimeInterval_repeats_block_(1 / 15.0, True, lambda t: ghost_tick())
+        interval = CFG.get("ghost_text_interval_seconds", 1.0)
+        NSTimer.scheduledTimerWithTimeInterval_repeats_block_(interval, True, lambda t: app._ghost_tick())
 
     def keep_warm():
         # Re-run the full cleanup prompt so Ollama's prompt cache (system + glossary,

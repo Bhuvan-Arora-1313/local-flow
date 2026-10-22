@@ -244,6 +244,100 @@ class _ToastTarget(AppKit.NSObject):
         self._toast.hide()
 
 
+_GHOST_W, _GHOST_H = 440.0, 92.0
+_GHOST_MAX_CHARS = 260  # keep only the most recent speech visible if it overflows
+
+
+class GhostText:
+    """A faded, live-updating preview of what you're saying, shown above the
+    island while recording. Not injected into any app's text field -- purely
+    an on-screen overlay. It's unmistakably a preview (dim caption + reduced
+    text opacity), and disappears the instant recording stops; the real,
+    final text is pasted the normal way afterward."""
+
+    def __init__(self):
+        self.panel = None
+        self._caption = None
+        self._label = None
+        self._visible = False
+
+    def _ensure(self):
+        if self.panel is not None:
+            return
+        style = AppKit.NSWindowStyleMaskBorderless | AppKit.NSWindowStyleMaskNonactivatingPanel
+        p = AppKit.NSPanel.alloc().initWithContentRect_styleMask_backing_defer_(
+            NSMakeRect(0, 0, _GHOST_W, _GHOST_H), style, AppKit.NSBackingStoreBuffered, False)
+        p.setFloatingPanel_(True)
+        p.setLevel_(AppKit.NSScreenSaverWindowLevel)
+        p.setOpaque_(False)
+        p.setBackgroundColor_(AppKit.NSColor.clearColor())
+        p.setHasShadow_(True)
+        p.setIgnoresMouseEvents_(True)
+        p.setReleasedWhenClosed_(False)
+        p.setBecomesKeyOnlyIfNeeded_(True)
+        p.setCollectionBehavior_(_CB)
+
+        bg = AppKit.NSView.alloc().initWithFrame_(NSMakeRect(0, 0, _GHOST_W, _GHOST_H))
+        bg.setWantsLayer_(True)
+        bg.layer().setCornerRadius_(16.0)
+        bg.layer().setBackgroundColor_(_rgba(0.09, 0.09, 0.11, 0.90).CGColor())
+        bg.layer().setBorderWidth_(1.0)
+        bg.layer().setBorderColor_(_rgba(1, 1, 1, 0.10).CGColor())
+        p.setContentView_(bg)
+
+        cap = AppKit.NSTextField.labelWithString_("● listening…")
+        cap.setFont_(AppKit.NSFont.systemFontOfSize_(10))
+        cap.setTextColor_(_rgba(1, 0.5, 0.45, 0.85))
+        cap.setFrame_(NSMakeRect(16, _GHOST_H - 24, _GHOST_W - 32, 16))
+        bg.addSubview_(cap)
+        self._caption = cap
+
+        lbl = AppKit.NSTextField.labelWithString_("")
+        lbl.setFont_(AppKit.NSFont.systemFontOfSize_(15))
+        lbl.setTextColor_(_rgba(1, 1, 1, 0.58))        # faded -- reads as provisional
+        lbl.setFrame_(NSMakeRect(16, 12, _GHOST_W - 32, _GHOST_H - 40))
+        lbl.setLineBreakMode_(AppKit.NSLineBreakByWordWrapping)
+        try:
+            lbl.cell().setUsesSingleLineMode_(False)
+            lbl.cell().setWraps_(True)
+        except Exception:
+            pass
+        bg.addSubview_(lbl)
+        self._label = lbl
+
+        self.panel = p
+
+    def _reposition(self):
+        screen = AppKit.NSScreen.mainScreen()
+        if screen is None:
+            return
+        vf = screen.visibleFrame()
+        x = vf.origin.x + (vf.size.width - _GHOST_W) / 2.0
+        y = vf.origin.y + 16.0 + _H + 12.0      # just above the island
+        self.panel.setFrameOrigin_(NSMakePoint(x, y))
+
+    def set_text(self, text: str):
+        if self._label is None:
+            return
+        text = (text or "").strip()
+        if len(text) > _GHOST_MAX_CHARS:
+            text = "…" + text[-_GHOST_MAX_CHARS:]
+        self._label.setStringValue_(text)
+
+    def show(self):
+        self._ensure()
+        self._reposition()
+        self.panel.orderFrontRegardless()
+        self.panel.invalidateShadow()
+        self._visible = True
+
+    def hide(self):
+        if self.panel is not None:
+            self.panel.orderOut_(None)
+        self._visible = False
+        self.set_text("")
+
+
 class Toast:
     """A small transient panel above the island: 'Added "word"'  [Undo]."""
 

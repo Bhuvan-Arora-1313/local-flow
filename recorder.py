@@ -10,6 +10,7 @@ bands toward the edges, so it stays symmetric and reacts to what you say.
 Each band has its own auto-gain, so quiet high-frequency sounds (s, sh, t) still
 move the outer bars instead of sitting flat.
 """
+import threading
 import numpy as np
 import sounddevice as sd
 
@@ -22,6 +23,7 @@ class Recorder:
     def __init__(self, sample_rate: int = 16000):
         self.sample_rate = sample_rate
         self._frames: list[np.ndarray] = []
+        self._frames_lock = threading.Lock()
         self._stream: sd.InputStream | None = None
         self.recording = False
         self._win = np.hanning(_FFT).astype(np.float32)
@@ -37,7 +39,8 @@ class Recorder:
 
     def _callback(self, indata, frames, time_info, status):
         mono = indata.reshape(-1).astype(np.float32)
-        self._frames.append(mono.copy())
+        with self._frames_lock:
+            self._frames.append(mono.copy())
 
         rms = float(np.sqrt(np.mean(mono * mono)) + 1e-9)
         self._level = rms
@@ -64,7 +67,8 @@ class Recorder:
     def start(self):
         if self.recording:
             return
-        self._frames = []
+        with self._frames_lock:
+            self._frames = []
         self._bands = np.zeros(_NB, dtype=np.float32)
         self._level = 0.0
         self._agc = np.full(_NB, 1e-3, dtype=np.float32)
@@ -84,9 +88,21 @@ class Recorder:
             self._stream.close()
         finally:
             self._stream = None
-        if not self._frames:
+        with self._frames_lock:
+            frames = list(self._frames)
+        if not frames:
             return np.zeros(0, dtype=np.float32)
-        return np.concatenate(self._frames).astype(np.float32)
+        return np.concatenate(frames).astype(np.float32)
+
+    def audio_so_far(self) -> np.ndarray:
+        """A copy of everything captured since start(), without stopping the
+        recording -- for a live/ghost preview while still talking. Safe to
+        call from any thread, concurrently with the recording continuing."""
+        with self._frames_lock:
+            frames = list(self._frames)
+        if not frames:
+            return np.zeros(0, dtype=np.float32)
+        return np.concatenate(frames).astype(np.float32)
 
     def snapshot(self):
         """(level, bands) — bands = _NB unique low->high values in 0..1.

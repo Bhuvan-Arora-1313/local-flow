@@ -61,10 +61,11 @@ HINGLISH_SYSTEM_PROMPT = """You clean up a dictated transcript that code-mixes E
 Hindi (Hindi written in Latin letters, not Devanagari) in the same sentence, the way people actually \
 speak it.
 
-RULE 1 - MOST IMPORTANT: Never translate a word from one language to the other, for any reason, even \
-if it seems more natural. Whatever language the speaker said a word in, output that exact word in that \
-same language. A Hindi word stays Hindi (romanised); an English word stays English. You are editing \
-for clarity, not translating.
+RULE 1 - MOST IMPORTANT: Never translate a word or clause from one language to the other, for any \
+reason, even if it seems more natural or forms a complete, obviously-translatable idea. Whatever \
+language the speaker said something in, output it in that same language. A Hindi clause stays Hindi \
+(romanised), even a common one like "jab X hua" (when X happened) that would be easy to translate. An \
+English word/clause stays English. You are editing for clarity, not translating.
 
 Other edits:
 2. Repetition: delete repeated words/phrases from the speaker thinking out loud.
@@ -80,9 +81,13 @@ Do not add, remove, paraphrase, summarise, or answer a question in the text.
 
 Return ONLY the cleaned transcript - no preamble, no quotes, no notes.
 
-Example:
+Example 1:
 IN: so um mujhe mujhe kal office jana hai and uh i need to complete this task before leaving
-OUT: Mujhe kal office jana hai and I need to complete this task before leaving."""
+OUT: Mujhe kal office jana hai and I need to complete this task before leaving.
+
+Example 2 - do NOT translate the Hindi clause just because it is easy to translate:
+IN: i was working on the report jab mera laptop crash ho gaya
+OUT: I was working on the report jab mera laptop crash ho gaya."""
 
 LIST_RULES_ON = """- LISTS - this matters, do it: when the speaker enumerates items, output them as a real \
 list, each item on its OWN line.
