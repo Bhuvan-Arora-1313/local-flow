@@ -141,9 +141,15 @@ class App:
         self.last_text = ""
         self.cleanup_on = CFG.get("cleanup_enabled", True)
         self._jobs: queue.Queue = queue.Queue()
-        # the ASR model is one MLX/Metal object; the hold-to-talk pipeline and
-        # a running meeting transcription must never call into it at once
-        self._asr_lock = threading.Lock()
+        # NOTE: concurrent calls into the ASR model (hold-to-talk, ghost
+        # preview, meeting transcription) are NOT serialized with a lock on
+        # purpose -- verified directly that MLX/Metal handles concurrent
+        # transcribe() calls safely (no crash/corruption across repeated
+        # tests). A shared lock was tried here first, but it creates a worse
+        # failure mode than not having one: if any single call ever hung
+        # while holding it, every future transcription would queue up behind
+        # it forever with no way to kill the stuck thread -- turning one rare
+        # hang into a permanently broken app until restart.
         self.meeting = None
         self._hotkey = resolve_key(CFG["hotkey"])
         self._hotkey_down = False
@@ -390,8 +396,7 @@ class App:
 
     def _ghost_transcribe(self, audio):
         try:
-            with self._asr_lock:
-                text = self.asr.transcribe(audio, prompt=", ".join(self.terms))
+            text = self.asr.transcribe(audio, prompt=", ".join(self.terms))
             if self.state == "rec":    # don't show a stale guess after you've stopped
                 self._ghost_text = text.strip()
         except Exception as e:
@@ -420,8 +425,7 @@ class App:
                 if self.asr is None:
                     continue
                 t0 = time.time()
-                with self._asr_lock:
-                    raw = self.asr.transcribe(audio, prompt=", ".join(self.terms))
+                raw = self.asr.transcribe(audio, prompt=", ".join(self.terms))
                 t1 = time.time()
                 text = dictmod.collapse_repeats(raw)
                 text = dictmod.tidy_commas(text)
@@ -687,14 +691,19 @@ def run_app(app: App):
         except Exception as e:
             print(f"[flow] status_tick: {e}")
 
+    _tick_failing = {"island": False, "ghost": False}
+
     def island_tick():
         if app.island is None:
             return
         try:
             app.island.set_state(app.state)
             app.island.tick()
-        except Exception:
-            pass
+            _tick_failing["island"] = False
+        except Exception as e:
+            if not _tick_failing["island"]:
+                _tick_failing["island"] = True
+                print(f"[flow] island_tick failing (further errors suppressed until it recovers): {e}")
 
     def ghost_tick():
         if app.ghost is None:
@@ -706,8 +715,11 @@ def run_app(app: App):
                 app.ghost.set_text(app._ghost_text)
             elif app.ghost._visible:
                 app.ghost.hide()
-        except Exception:
-            pass
+            _tick_failing["ghost"] = False
+        except Exception as e:
+            if not _tick_failing["ghost"]:
+                _tick_failing["ghost"] = True
+                print(f"[flow] ghost_tick failing (further errors suppressed until it recovers): {e}")
 
     NSTimer.scheduledTimerWithTimeInterval_repeats_block_(0.25, True, lambda t: status_tick())
     if app.island is not None:

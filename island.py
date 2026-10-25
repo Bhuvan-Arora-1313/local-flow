@@ -191,7 +191,15 @@ class Island:
         self.panel, self.view = panel, view
 
     def _reposition(self):
+        # mainScreen() can transiently return None (display/sleep-wake
+        # transitions, Spaces changes); fall back to the first available
+        # screen rather than silently leaving the panel unpositioned (which
+        # would leave it sitting at its initial (0,0) origin the first time
+        # this happens, off in a corner instead of invisible, but wrong).
         screen = AppKit.NSScreen.mainScreen()
+        if screen is None:
+            screens = AppKit.NSScreen.screens()
+            screen = screens[0] if screens else None
         if screen is None:
             return
         vf = screen.visibleFrame()
@@ -309,6 +317,9 @@ class GhostText:
 
     def _reposition(self):
         screen = AppKit.NSScreen.mainScreen()
+        if screen is None:
+            screens = AppKit.NSScreen.screens()
+            screen = screens[0] if screens else None
         if screen is None:
             return
         vf = screen.visibleFrame()
