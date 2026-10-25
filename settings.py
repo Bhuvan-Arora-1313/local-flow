@@ -241,10 +241,10 @@ class SettingsWindow:
         check("auto_paste", "Paste automatically (off = just copy)")
         check("trailing_space", "Add a space after each dictation")
         check("notify", "Show notifications")
-        check("learn_words", "Learn new words as I type", default=False)
+        check("learn_words", "Learn words I correct by hand after dictating", default=False)
         hint = AppKit.NSTextField.labelWithString_(
-            "   Unusual words you type 2+ times get added to the glossary. "
-            "Only single words, all local.")
+            "   Only watches typing for ~1 minute right after a dictation is pasted -- "
+            "not all the time. Retype a misheard word and it's learned. All local.")
         hint.setFont_(AppKit.NSFont.systemFontOfSize_(11))
         hint.setTextColor_(AppKit.NSColor.secondaryLabelColor())
         hint.setFrame_(NSMakeRect(22, y, W - 44, 16))

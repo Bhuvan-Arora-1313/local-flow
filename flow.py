@@ -192,7 +192,8 @@ class App:
         self.learner = None
         if learn is not None:
             try:
-                self.learner = learn.Learner(lambda: self.terms)
+                self.learner = learn.Learner(
+                    lambda: self.terms, CFG.get("learn_correction_window_seconds", 60.0))
             except Exception as e:
                 print(f"[flow] learner init failed: {e}")
 
@@ -456,6 +457,8 @@ class App:
                         inserter.paste_text(text)
                     else:
                         subprocess.run(["pbcopy"], input=text.encode(), check=False)
+                    if self.learner is not None:
+                        self.learner.arm_correction_window()
                     if usage is not None:
                         try:
                             latency_ms = (time.time() - self._work_started_at) * 1000.0
