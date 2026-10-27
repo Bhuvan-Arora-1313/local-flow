@@ -370,16 +370,32 @@ class App:
         self._ghost_text = ""
         try:
             self.rec.start()
-            play("start")
-            if self.ghost is not None:
-                # don't wait for the next periodic tick (up to
-                # ghost_text_interval_seconds away) for the first preview
-                t = threading.Timer(0.35, self._ghost_tick)
-                t.daemon = True
-                t.start()
         except Exception as e:
-            print(f"[flow] mic start failed: {e}")
-            self.state = "idle"
+            # Transient CoreAudio/PortAudio hiccups (e.g. right after a
+            # Bluetooth mic or virtual-device switch) often clear up if
+            # PortAudio re-scans the device list -- this is the usual fix
+            # for PaErrorCode -9986 (Internal PortAudio error). Try once
+            # more before giving up, since silently doing nothing here is
+            # exactly what makes the hotkey tap look like it was ignored.
+            print(f"[flow] mic start failed, retrying once: {e}")
+            try:
+                import sounddevice as sd
+                sd._terminate()
+                sd._initialize()
+                self.rec.start()
+            except Exception as e2:
+                print(f"[flow] mic start failed again, giving up: {e2}")
+                self.state = "idle"
+                play("error")
+                notify("LocalFlow", "Couldn't start the microphone — try again")
+                return
+        play("start")
+        if self.ghost is not None:
+            # don't wait for the next periodic tick (up to
+            # ghost_text_interval_seconds away) for the first preview
+            t = threading.Timer(0.35, self._ghost_tick)
+            t.daemon = True
+            t.start()
 
     def _ghost_tick(self):
         """Kick off one live-preview re-transcription, if one isn't already
@@ -537,6 +553,16 @@ class App:
         if self.last_text:
             subprocess.run(["pbcopy"], input=self.last_text.encode(), check=False)
 
+    def restart(self):
+        """Menu-bar 'Restart LocalFlow': hand off to the `localflow` control
+        script (stop; start) as a detached process, then quit this instance.
+        Covers both the launchd-installed app and a dev `run.sh` launch --
+        the script already knows which one applies."""
+        print("[flow] restart requested from menu bar")
+        script = os.path.join(BASE, "localflow")
+        subprocess.Popen([script, "restart"], stdout=subprocess.DEVNULL,
+                          stderr=subprocess.DEVNULL, start_new_session=True)
+
     # ---------- text for the UI ----------
     def status_glyph(self):
         return {"loading": "LF·", "idle": "LF", "rec": "● REC",
@@ -617,6 +643,9 @@ def run_app(app: App):
             except Exception as e:
                 print(f"[flow] usage failed: {e}")
 
+        def restartApp_(self, sender):
+            app.restart()
+
         def quitApp_(self, sender):
             AppKit.NSApp().terminate_(None)
 
@@ -643,6 +672,8 @@ def run_app(app: App):
     add("Settings…", b"openSettings:", ",")
     add("Usage & History…", b"openUsage:")
     add("Reload dictionary", b"reloadDict:")
+    menu.addItem_(AppKit.NSMenuItem.separatorItem())
+    add("Restart LocalFlow", b"restartApp:")
     menu.addItem_(AppKit.NSMenuItem.separatorItem())
     add("Quit LocalFlow", b"quitApp:", "q")
 
