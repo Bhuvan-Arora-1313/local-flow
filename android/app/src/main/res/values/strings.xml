@@ -22,4 +22,5 @@
     <string name="label_island_opacity">Opacity</string>    <string name="label_ghost_text">Show live text while speaking</string>
     <string name="hint_ghost_text">A faded, rough preview above the island, refreshed about once a second. The final inserted text still goes through full cleanup. Uses a little more of your Mac\'s GPU while you talk.</string>    <string name="action_enable_keyboard">Enable the LocalFlow keyboard</string>
     <string name="how_to_dictate_keyboard">To dictate: tap into any text field, switch to the LocalFlow Remote keyboard with the keyboard-switcher button, then tap the island. Tap the keyboard icon on its right to switch back to your normal keyboard.</string>
+    <string name="action_restart_mac">Restart LocalFlow on Mac</string>
 </resources>

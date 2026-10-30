@@ -80,4 +80,19 @@ object ApiClient {
     } catch (e: Exception) {
         Result.failure(e)
     }
+
+    /** Asks LocalFlow on the Mac to restart itself (for when it's stuck). */
+    fun restartMac(host: String, port: Int, token: String): Result<Boolean> = try {
+        val req = Request.Builder()
+            .url("${baseUrl(host, port)}/v1/restart")
+            .header("Authorization", "Bearer $token")
+            .post(ByteArray(0).toRequestBody(null))
+            .build()
+        client.newCall(req).execute().use { resp ->
+            if (resp.isSuccessful) Result.success(true)
+            else Result.failure(IOException("HTTP ${resp.code}"))
+        }
+    } catch (e: Exception) {
+        Result.failure(e)
+    }
 }

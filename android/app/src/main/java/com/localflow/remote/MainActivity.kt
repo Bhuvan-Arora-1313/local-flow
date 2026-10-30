@@ -51,6 +51,7 @@ class MainActivity : AppCompatActivity() {
         tokenInput.setText(Prefs.token(this))
 
         findViewById<MaterialButton>(R.id.testButton).setOnClickListener { testConnection() }
+        findViewById<MaterialButton>(R.id.restartMacButton).setOnClickListener { restartMac() }
         findViewById<MaterialButton>(R.id.micPermButton).setOnClickListener { requestMic() }
         findViewById<MaterialButton>(R.id.overlayPermButton).setOnClickListener { requestOverlay() }
         findViewById<MaterialButton>(R.id.notifPermButton).setOnClickListener { requestNotifications() }
@@ -120,6 +121,32 @@ class MainActivity : AppCompatActivity() {
                 testResult.text = result.fold(
                     onSuccess = { "Connected to $host:$port" },
                     onFailure = { "Couldn't reach $host:$port — ${it.message}" })
+            }
+        }.start()
+    }
+
+    /** For when LocalFlow on the Mac is stuck and you're away from it. */
+    private fun restartMac() {
+        savePrefs()
+        val host = Prefs.host(this)
+        val port = Prefs.port(this)
+        val token = Prefs.token(this)
+        testResult.text = "Restarting LocalFlow on the Mac…"
+        Thread {
+            // LocalFlow may shut down before its reply arrives, so don't trust
+            // the reply alone -- wait for it to answer again (~15s)
+            val sent = ApiClient.restartMac(host, port, token)
+            Thread.sleep(5000)
+            for (i in 0 until 30) {
+                if (ApiClient.health(host, port, token).isSuccess) {
+                    runOnUiThread { testResult.text = "LocalFlow restarted and is ready" }
+                    return@Thread
+                }
+                Thread.sleep(1000)
+            }
+            runOnUiThread {
+                testResult.text = if (sent.isFailure) "Couldn't reach the Mac — ${sent.exceptionOrNull()?.message}"
+                else "Restart sent, but LocalFlow hasn't come back yet"
             }
         }.start()
     }

@@ -17,6 +17,10 @@ import subprocess
 
 BASE = os.path.dirname(os.path.abspath(__file__))
 
+if __name__ == "__main__":
+    import logstamp
+    logstamp.install()
+
 
 def load_config():
     for path in (os.path.join(BASE, "config.json"),

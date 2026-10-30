@@ -14,6 +14,7 @@ for it -- plain HTTP over the tailnet is the normal, documented pattern for
 this kind of internal-only service.
 """
 import asyncio
+import os
 import secrets
 import subprocess
 import threading
@@ -131,6 +132,19 @@ class RemoteServer:
 
     def _build_app(self) -> FastAPI:
         api = FastAPI(title="LocalFlow remote dictation", docs_url=None, redoc_url=None)
+
+        @api.post("/v1/restart")
+        def restart(request: Request):
+            """Restart LocalFlow from a phone/tablet, for when the Mac app is
+            stuck and you're not at the Mac. This server runs on its own
+            thread, so it still answers when the hotkey or dictation pipeline
+            is wedged. Same `localflow restart` the menu-bar item uses."""
+            self._check_token(request)
+            print("[server] restart requested from a remote device")
+            script = os.path.join(os.path.dirname(os.path.abspath(__file__)), "localflow")
+            subprocess.Popen([script, "restart"], stdout=subprocess.DEVNULL,
+                             stderr=subprocess.DEVNULL, start_new_session=True)
+            return {"ok": True}
 
         @api.get("/v1/health")
         def health(request: Request):

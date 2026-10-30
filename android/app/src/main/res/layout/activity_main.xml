@@ -62,6 +62,14 @@
             android:layout_marginTop="12dp"
             android:text="@string/action_test_connection" />
 
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/restartMacButton"
+            style="@style/Widget.Material3.Button.OutlinedButton"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:text="@string/action_restart_mac" />
+
         <TextView
             android:id="@+id/testResult"
             android:layout_width="match_parent"
