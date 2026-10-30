@@ -471,4 +471,12 @@ Input Monitoring / Accessibility).
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+LocalFlow is source-available under the **[PolyForm Noncommercial License 1.0.0](LICENSE)**.
+
+- **Free** for personal use, students, research, hobby projects, and charitable, educational
+  or government organizations.
+- **Commercial use needs permission.** That includes selling it, bundling it into a paid
+  product or service, or using it inside a company for business purposes. To ask for a
+  commercial license, [open an issue](https://github.com/Bhuvan-Arora-1313/local-flow/issues).
+
+Versions published before this license change (up to commit `9672f54`) were released under the MIT License.
