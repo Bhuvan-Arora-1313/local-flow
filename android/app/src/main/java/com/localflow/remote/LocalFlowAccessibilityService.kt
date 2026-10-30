@@ -11,6 +11,7 @@ import android.os.Handler
 import android.os.Looper
 import android.text.InputType
 import android.util.Log
+import android.view.KeyEvent
 import android.view.View
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
@@ -144,6 +145,29 @@ class LocalFlowAccessibilityService : AccessibilityService() {
             }
         }
         return insertViaNode(text)
+    }
+
+    /**
+     * What a keyboard's Enter key does: trigger the field's own action if it
+     * declares one (Search, Send, Go...), otherwise send a real Enter key
+     * press -- which is what a terminal like Termux needs to run the line.
+     */
+    fun pressEnter(): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return false
+        val im = inputMethod ?: return false
+        val ic = im.currentInputConnection ?: return false
+        val info = im.currentInputEditorInfo
+        val action = (info?.imeOptions ?: 0) and EditorInfo.IME_MASK_ACTION
+        val noEnterAction = ((info?.imeOptions ?: 0) and EditorInfo.IME_FLAG_NO_ENTER_ACTION) != 0
+        if (!noEnterAction && action != EditorInfo.IME_ACTION_NONE &&
+            action != EditorInfo.IME_ACTION_UNSPECIFIED
+        ) {
+            ic.performEditorAction(action)
+        } else {
+            ic.sendKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_ENTER))
+            ic.sendKeyEvent(KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_ENTER))
+        }
+        return true
     }
 
     // ---------- pre-Android-13 fallback ----------

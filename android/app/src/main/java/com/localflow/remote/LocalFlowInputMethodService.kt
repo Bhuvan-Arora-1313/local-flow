@@ -6,6 +6,7 @@ import android.inputmethodservice.InputMethodService
 import android.os.Handler
 import android.os.Looper
 import android.view.Gravity
+import android.view.KeyEvent
 import android.view.View
 import android.view.ViewGroup
 import android.view.inputmethod.InputMethodManager
@@ -44,7 +45,8 @@ class LocalFlowInputMethodService : InputMethodService() {
             bandsProvider = { recorder.bands }
             onStart = { start() }
             onCancel = { cancel() }
-            onConfirm = { finish() }
+            onConfirm = { finish(pressEnter = false) }
+            onSend = { finish(pressEnter = true) }
         }
         island = v
         column.addView(v)
@@ -102,15 +104,15 @@ class LocalFlowInputMethodService : InputMethodService() {
         setState(IslandState.IDLE)
     }
 
-    private fun finish() {
+    private fun finish(pressEnter: Boolean) {
         if (!recorder.isRecording()) return
         val pcm = recorder.stop()
         setState(IslandState.SENDING)
         val job = ++jobId
-        Thread { sendAndCommit(pcm, job) }.start()
+        Thread { sendAndCommit(pcm, job, pressEnter) }.start()
     }
 
-    private fun sendAndCommit(pcm: ByteArray, job: Int) {
+    private fun sendAndCommit(pcm: ByteArray, job: Int, pressEnter: Boolean) {
         val host = Prefs.host(this)
         val port = Prefs.port(this)
         val token = Prefs.token(this)
@@ -125,8 +127,13 @@ class LocalFlowInputMethodService : InputMethodService() {
         mainHandler.post {
             if (job != jobId) return@post   // cancelled while transcribing
             result.onSuccess { text ->
-                if (text.isNotBlank()) currentInputConnection?.commitText(text, 1)
-                else toast("Heard nothing")
+                if (text.isNotBlank()) {
+                    currentInputConnection?.commitText(text, 1)
+                    // like the Enter key: the field's own action, else a real Enter press
+                    if (pressEnter && !sendDefaultEditorAction(true)) {
+                        sendDownUpKeyEvents(KeyEvent.KEYCODE_ENTER)
+                    }
+                } else toast("Heard nothing")
             }.onFailure { e -> toast("Dictation failed: ${e.message}") }
             setState(IslandState.IDLE)
         }

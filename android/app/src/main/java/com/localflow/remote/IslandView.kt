@@ -17,7 +17,7 @@ enum class IslandState { IDLE, RECORDING, SENDING }
 /**
  * The floating island -- Android twin of the Mac's island.py: a dark pill
  * that sits small while idle, and while dictating expands to
- * [x]  live voice bars  [check]. Bars are the live frequency spectrum
+ * [x]  live voice bars  [stop] [send]. Bars are the live frequency spectrum
  * mirrored around the centre, like the Mac version.
  */
 class IslandView(context: Context) : View(context) {
@@ -34,7 +34,8 @@ class IslandView(context: Context) : View(context) {
     var bandsProvider: (() -> FloatArray)? = null
     var onStart: (() -> Unit)? = null
     var onCancel: (() -> Unit)? = null
-    var onConfirm: (() -> Unit)? = null
+    var onConfirm: (() -> Unit)? = null      // ■ stop and insert
+    var onSend: (() -> Unit)? = null         // ↑ insert, then Enter
     var onDrag: ((dx: Float, dy: Float) -> Unit)? = null
     var onDragEnd: (() -> Unit)? = null
 
@@ -70,7 +71,7 @@ class IslandView(context: Context) : View(context) {
     }
     private val rect = RectF()
 
-    fun widthFor(s: IslandState): Int = (if (s == IslandState.IDLE) dp(58f) else dp(200f)).toInt()
+    fun widthFor(s: IslandState): Int = (if (s == IslandState.IDLE) dp(58f) else dp(244f)).toInt()
     private fun heightFor(s: IslandState): Int = (if (s == IslandState.IDLE) dp(34f) else dp(46f)).toInt()
 
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
@@ -130,13 +131,21 @@ class IslandView(context: Context) : View(context) {
         canvas.drawLine(lx - k, cy - k, lx + k, cy + k, glyph)
         canvas.drawLine(lx - k, cy + k, lx + k, cy - k, glyph)
         if (!confirm) return
-        // confirm (check), right
+        // stop and insert (square), second from right
+        val sx = w - h * 1.5f
+        canvas.drawCircle(sx, cy, r, cancelBg)
+        val q = r * 0.34f
+        rect.set(sx - q, cy - q, sx + q, cy + q)
+        bar.alpha = 235
+        canvas.drawRoundRect(rect, q * 0.3f, q * 0.3f, bar)
+        // send (up arrow): insert, then Enter -- far right
         val rx = w - h / 2
         canvas.drawCircle(rx, cy, r, confirmBg)
         glyph.color = Color.rgb(23, 23, 28)
-        val s = r * 0.42f
-        canvas.drawLine(rx - s, cy + s * 0.05f, rx - s * 0.25f, cy + s * 0.75f, glyph)
-        canvas.drawLine(rx - s * 0.25f, cy + s * 0.75f, rx + s, cy - s * 0.6f, glyph)
+        val a = r * 0.45f
+        canvas.drawLine(rx, cy + a, rx, cy - a, glyph)
+        canvas.drawLine(rx - a * 0.75f, cy - a * 0.2f, rx, cy - a, glyph)
+        canvas.drawLine(rx + a * 0.75f, cy - a * 0.2f, rx, cy - a, glyph)
     }
 
     private fun drawBars(canvas: Canvas, w: Float, h: Float) {
@@ -154,7 +163,7 @@ class IslandView(context: Context) : View(context) {
         }
 
         val left = h + dp(4f)
-        val right = w - h - dp(4f)
+        val right = w - h * 2 - dp(4f)
         val bw = dp(2.5f)
         val gap = (right - left - n * bw) / (n - 1)
         val maxH = h - dp(16f)
@@ -214,7 +223,8 @@ class IslandView(context: Context) : View(context) {
             IslandState.IDLE -> onStart?.invoke()
             IslandState.RECORDING -> when {
                 x <= zone -> onCancel?.invoke()
-                x >= width - zone -> onConfirm?.invoke()
+                x >= width - height -> onSend?.invoke()
+                x >= width - height * 2 - dp(6f) -> onConfirm?.invoke()
             }
             IslandState.SENDING -> if (x <= zone) onCancel?.invoke()
         }

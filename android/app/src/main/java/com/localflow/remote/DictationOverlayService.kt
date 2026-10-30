@@ -146,7 +146,8 @@ class DictationOverlayService : Service() {
         }
         v.onStart = { startRecording() }
         v.onCancel = { cancel() }
-        v.onConfirm = { finishRecording() }
+        v.onConfirm = { finishRecording(pressEnter = false) }
+        v.onSend = { finishRecording(pressEnter = true) }
         v.visibility = View.GONE
         try {
             windowManager.addView(v, lp)
@@ -416,15 +417,15 @@ class DictationOverlayService : Service() {
         toIdle()
     }
 
-    private fun finishRecording() {
+    private fun finishRecording(pressEnter: Boolean) {
         if (!recorder.isRecording()) return
         val pcm = recorder.stop()
         setState(IslandState.SENDING)
         val job = ++jobId
-        Thread { sendAndInsert(pcm, job) }.start()
+        Thread { sendAndInsert(pcm, job, pressEnter) }.start()
     }
 
-    private fun sendAndInsert(pcm: ByteArray, job: Int) {
+    private fun sendAndInsert(pcm: ByteArray, job: Int, pressEnter: Boolean) {
         val host = Prefs.host(this)
         val port = Prefs.port(this)
         val token = Prefs.token(this)
@@ -440,8 +441,10 @@ class DictationOverlayService : Service() {
             if (job != jobId) return@post   // cancelled while transcribing
             result.onSuccess { text ->
                 if (text.isNotBlank()) {
-                    val inserted = LocalFlowAccessibilityService.instance?.insertText(text) ?: false
+                    val a11y = LocalFlowAccessibilityService.instance
+                    val inserted = a11y?.insertText(text) ?: false
                     if (!inserted) toast("Couldn't insert text -- copied to clipboard instead")
+                    else if (pressEnter) a11y?.pressEnter()
                 } else {
                     toast("Heard nothing")
                 }
