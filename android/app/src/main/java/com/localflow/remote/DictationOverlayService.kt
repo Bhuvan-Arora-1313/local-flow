@@ -289,12 +289,19 @@ class DictationOverlayService : Service() {
         val v = island ?: return
         val lp = params ?: return
         if (v.state == s) return
-        val oldW = v.widthFor(v.state)
-        val newW = v.widthFor(s)
-        val screenW = resources.displayMetrics.widthPixels
-        lp.x = (lp.x - (newW - oldW) / 2).coerceIn(0, (screenW - newW).coerceAtLeast(0))
-        v.state = s
-        relayout()
+        if (s == IslandState.IDLE) {
+            // back to the saved spot -- undoes any shift that was needed to
+            // keep the wider recording island on screen near an edge
+            v.state = s
+            restorePosition()
+        } else {
+            val oldW = v.widthFor(v.state)
+            val newW = v.widthFor(s)
+            val (screenW, _) = screenSize()
+            lp.x = (lp.x - (newW - oldW) / 2).coerceIn(0, (screenW - newW).coerceAtLeast(0))
+            v.state = s
+            relayout()
+        }
         if (s != IslandState.RECORDING) hideGhost()
     }
 

@@ -3,7 +3,10 @@ package com.localflow.remote
 import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
+import android.media.AudioAttributes
+import android.media.AudioFocusRequest
 import android.media.AudioFormat
+import android.media.AudioManager
 import android.media.AudioRecord
 import android.media.MediaRecorder
 import androidx.core.content.ContextCompat
@@ -38,6 +41,8 @@ class AudioRecorder {
     }
 
     private var record: AudioRecord? = null
+    private var audioManager: AudioManager? = null
+    private var focusRequest: AudioFocusRequest? = null
     private var thread: Thread? = null
     private val buffer = ByteArrayOutputStream()
     @Volatile private var recording = false
@@ -86,6 +91,7 @@ class AudioRecorder {
         bands = FloatArray(BANDS)
         record = r
         recording = true
+        pauseOtherAudio(context)
         r.startRecording()
         thread = Thread {
             val chunk = ByteArray(FFT * 2)        // 512 samples = 32ms
@@ -179,6 +185,32 @@ class AudioRecorder {
         }
     }
 
+    /**
+     * Music or video playing on this same device is otherwise picked up by
+     * the mic and transcribed. Taking transient audio focus makes media apps
+     * (Spotify, YouTube Music, ...) pause while you dictate, and resume on
+     * their own when it's released in stop().
+     */
+    private fun pauseOtherAudio(context: Context) {
+        val am = context.getSystemService(AudioManager::class.java) ?: return
+        val req = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_EXCLUSIVE)
+            .setAudioAttributes(
+                AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_ASSISTANT)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                    .build())
+            .setOnAudioFocusChangeListener { }
+            .build()
+        am.requestAudioFocus(req)
+        audioManager = am
+        focusRequest = req
+    }
+
+    private fun resumeOtherAudio() {
+        focusRequest?.let { audioManager?.abandonAudioFocusRequest(it) }
+        focusRequest = null
+    }
+
     /** Stops recording and returns everything captured, as raw PCM16 bytes. */
     fun stop(): ByteArray {
         recording = false
@@ -192,6 +224,7 @@ class AudioRecorder {
             it.release()
         }
         record = null
+        resumeOtherAudio()
         bands = FloatArray(BANDS)
         return synchronized(buffer) { buffer.toByteArray() }
     }
