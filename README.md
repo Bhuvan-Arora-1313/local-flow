@@ -28,6 +28,7 @@ no subscription, no credits, nothing leaves your machine.
 - [Using it](#using-it)
 - [The models & RAM — important](#the-models--ram--important)
 - [Hindi / Hinglish](#hindi--hinglish)
+- [Dictate from your phone or tablet](#dictate-from-your-phone-or-tablet)
 - [Settings reference](#settings-reference)
 - [Starting, stopping, updating](#starting-stopping-updating)
 - [Troubleshooting](#troubleshooting)
@@ -50,8 +51,10 @@ no subscription, no credits, nothing leaves your machine.
 | **Hindi / Hinglish** | Optional Whisper model + Roman-output mode: speak Hindi, get `kya haal hai` (or Devanagari). |
 | **Usage & History** | Total words, dictations, day-streak, and your recent transcripts. |
 | **Menu-bar app** | Runs quietly as `LF` in the menu bar. Optional launch-at-login. |
+| **Phone & tablet** | An Android app puts a floating island in any text field on your phone/tablet; the speech model still runs on your Mac, over your own [Tailscale](https://tailscale.com) network. See [Dictate from your phone or tablet](#dictate-from-your-phone-or-tablet). |
 
-Everything runs locally. The only network use is a one-time model download during setup.
+Everything runs locally. The only network use is a one-time model download during setup — and, if you
+use the Android app, audio travelling between your own devices over your private Tailscale network.
 
 ---
 
@@ -260,6 +263,82 @@ actually dictating Hindi.
 
 ---
 
+## Dictate from your phone or tablet
+
+The `android/` app gives your Android phone or tablet the same dictation: a small floating
+**island** appears whenever a text field is active, in any app. Tap it and speak, then tap **✓** to
+insert the text or **✕** to discard. Your Mac does the actual work: same speech model, same
+dictionary, same LLM cleanup. The audio travels over your own Tailscale network, never a third-party
+server.
+
+```
+  phone / tablet                              your Mac (LocalFlow)
+  ┌──────────────────────┐   Tailscale    ┌──────────────────────────────────┐
+  │ island: ✕ ▂▅▇▅▂ ✓   │ ── audio ────▶ │ speech-to-text → dictionary →     │
+  │ types into the field │ ◀── text ──── │ LLM cleanup  (server.py)          │
+  └──────────────────────┘                └──────────────────────────────────┘
+```
+
+**What it does**
+
+- Works in every app, including Termux, Samsung Notes and WhatsApp, alongside your normal
+  keyboard (no keyboard switching). It types through an accessibility input connection, the
+  same path a keyboard uses.
+- Shows only while a text field is active, even if you lower the keyboard. Hides when you leave the field.
+- Live voice bars (the same spectrum as the Mac island), drag to move, and it remembers a
+  separate position for portrait and landscape.
+- **Island appearance** settings: size, opacity, and optional *live text while speaking*
+  (a faded rough preview above the island).
+
+### 1. Turn it on on the Mac
+
+1. Install [Tailscale](https://tailscale.com) on the Mac and the Android device, signed in to the same account.
+2. LocalFlow **Settings → Remote / Network** → tick **Allow remote dictation over the network**,
+   click **Generate** for a pairing token. Note the *Reachable at* address.
+
+The server listens only on the Mac's Tailscale address, never on your Wi-Fi, and refuses any
+request without the token.
+
+### 2. Build and install the app
+
+Needs the Android SDK and a JDK (`brew install --cask android-commandlinetools`,
+`brew install openjdk@17 gradle`), or just open `android/` in Android Studio.
+
+```sh
+cd android
+gradle assembleIslandDebug          # → app/build/outputs/apk/island/debug/app-island-debug.apk
+```
+
+Install it with **adb**: turn on *Developer options → Wireless debugging* on the device, then
+`adb pair` and `adb connect` (over Tailscale works), then:
+
+```sh
+adb install -r app/build/outputs/apk/island/debug/app-island-debug.apk
+```
+
+> **Why adb and not a downloaded APK?** In some regions (including India) Google Play Protect
+> blocks installing any app from a browser or file manager if it uses an accessibility service,
+> with no override, even with Play Protect scanning off. Installs over adb are exempt.
+
+### 3. Set it up in the app
+
+Open **LocalFlow Remote**, enter the Mac's Tailscale address, port `8765` and the token, and tap
+**Test connection**. Then go down the **Setup** buttons (microphone, floating window,
+notifications, accessibility service, battery) and tap **Enable floating dictation**.
+
+After reinstalling an update, tap **Enable floating dictation** again. Android stops the
+service when an app is replaced.
+
+### Good to know
+
+- The island won't appear in Android's own **Settings** app or some banking/UPI apps. Those
+  apps tell Android to hide all floating windows, as a security measure.
+- A `keyboard` build variant (`gradle assembleKeyboardDebug`) does the same dictation as a
+  selectable keyboard with no accessibility service. It installs straight from a browser, but you
+  have to switch keyboards to dictate.
+
+---
+
 ## Settings reference
 
 Open with the menu-bar `LF` → **Settings…** (or ⌘,). Changes to toggles, models and
@@ -297,6 +376,9 @@ Switch to Whisper + Hindi only when you want it — see [Hindi / Hinglish](#hind
 | **Cleanup model** | any model from your `ollama list` |
 | **Hindi model** | model for Devanagari→Roman, or "(none)" |
 | **Ollama model** *(usage/history)* | — |
+| **Allow remote dictation over the network** | serve your phone/tablet over Tailscale (see [above](#dictate-from-your-phone-or-tablet)) |
+| **Also paste remote dictations at this Mac's cursor** | phone dictation also lands on the Mac |
+| **Port** / **Pairing token** | where the remote server listens / the secret your device must send (port change needs a restart) |
 | **Dictionary editor** | edit terms & `⇒` rules; Save reloads live |
 | **Usage & History** | totals, streak, recent transcripts |
 
@@ -357,6 +439,8 @@ local-flow/
   usage.py           usage stats + the Usage & History window
   settings.py        the native Settings window
   inserter.py        paste-at-cursor
+  server.py          remote-dictation server for the Android app (Tailscale-only, token-checked)
+  android/           the Android app (floating island; `island` and `keyboard` build variants)
   launcher.c         compiled bundle entry point (embeds Python)
   config.default.json   shipped defaults  (your live settings live in config.json, git-ignored)
   dictionary.txt        the vocabulary  (edit via Settings)

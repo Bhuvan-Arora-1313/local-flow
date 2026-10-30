@@ -8,3 +8,5 @@ pyperclip
 requests
 pyobjc-framework-Cocoa
 pyobjc-framework-Quartz
+fastapi
+uvicorn[standard]

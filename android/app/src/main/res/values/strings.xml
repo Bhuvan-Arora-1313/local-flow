@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">LocalFlow Remote</string>
+    <string name="accessibility_service_description">Lets LocalFlow show a floating mic button in text fields and insert dictated text there. Only looks at whether a field is focused and editable -- never reads or stores what you type.</string>
+
+    <string name="hint_host">Mac\'s Tailscale address (IP or name)</string>
+    <string name="hint_port">Port</string>
+    <string name="hint_token">Pairing token</string>
+    <string name="action_test_connection">Test connection</string>
+
+    <string name="section_permissions">Setup</string>
+    <string name="action_grant_mic">Grant microphone access</string>
+    <string name="action_grant_overlay">Grant floating-bubble (overlay) permission</string>
+    <string name="action_grant_notifications">Grant notifications permission</string>
+    <string name="action_enable_accessibility">Enable the LocalFlow accessibility service</string>
+    <string name="action_ignore_battery">Allow running in the background (battery)</string>
+
+    <string name="action_enable_dictation">Enable floating dictation</string>
+    <string name="action_disable_dictation">Disable floating dictation</string>
+    <string name="section_island">Island appearance</string>
+    <string name="label_island_size">Size</string>
+    <string name="label_island_opacity">Opacity</string>    <string name="label_ghost_text">Show live text while speaking</string>
+    <string name="hint_ghost_text">A faded, rough preview above the island, refreshed about once a second. The final inserted text still goes through full cleanup. Uses a little more of your Mac\'s GPU while you talk.</string>    <string name="action_enable_keyboard">Enable the LocalFlow keyboard</string>
+    <string name="how_to_dictate_keyboard">To dictate: tap into any text field, switch to the LocalFlow Remote keyboard with the keyboard-switcher button, then tap the island. Tap the keyboard icon on its right to switch back to your normal keyboard.</string>
+</resources>

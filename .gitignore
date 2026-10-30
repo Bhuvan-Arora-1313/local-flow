@@ -16,3 +16,6 @@ history.jsonl
 learned.txt
 localflow.log
 stats.json
+
+# converted speech models (large binaries)
+models/

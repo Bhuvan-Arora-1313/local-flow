@@ -144,6 +144,9 @@ class _Actions(NSObject):
     def openUsage_(self, sender):
         self._owner._open_usage()
 
+    def regenToken_(self, sender):
+        self._owner._regen_token()
+
 
 class SettingsWindow:
     """Owns one NSWindow. Call .show()."""
@@ -156,7 +159,7 @@ class SettingsWindow:
 
     # ---------- build ----------
     def _build(self):
-        W, H = 520, 928
+        W, H = 520, 1090
         style = (AppKit.NSWindowStyleMaskTitled | AppKit.NSWindowStyleMaskClosable)
         win = AppKit.NSWindow.alloc().initWithContentRect_styleMask_backing_defer_(
             NSMakeRect(0, 0, W, H), style, AppKit.NSBackingStoreBuffered, False)
@@ -280,6 +283,44 @@ class SettingsWindow:
         content.addSubview_(hh)
         y -= 22
 
+        y -= 6
+        label("Remote / Network  (port change needs a restart; everything else is live)", bold=True)
+        check("remote_enabled", "Allow remote dictation over the network (phone/tablet via Tailscale)",
+              default=False)
+        check("remote_also_paste_locally", "Also paste remote dictations at this Mac's cursor",
+              default=False)
+        textrow("remote_port", "Port", cfg.get("remote_port", 8765), width=80)
+
+        lb = AppKit.NSTextField.labelWithString_("Pairing token")
+        lb.setFrame_(NSMakeRect(22, y, 150, 20))
+        content.addSubview_(lb)
+        tf = AppKit.NSTextField.alloc().initWithFrame_(NSMakeRect(180, y - 2, 220, 24))
+        tf.setStringValue_(cfg.get("remote_token", ""))
+        content.addSubview_(tf)
+        self.controls["remote_token"] = tf
+        bgen = AppKit.NSButton.alloc().initWithFrame_(NSMakeRect(410, y - 3, 90, 26))
+        bgen.setTitle_("Generate")
+        bgen.setBezelStyle_(AppKit.NSBezelStyleRounded)
+        bgen.setTarget_(self.act)
+        bgen.setAction_(b"regenToken:")
+        content.addSubview_(bgen)
+        y -= 30
+
+        try:
+            import server as _remote_mod
+            ts_ip = _remote_mod.tailscale_ip()
+        except Exception:
+            ts_ip = None
+        reach = (f"Reachable at: http://{ts_ip}:{cfg.get('remote_port', 8765)}" if ts_ip
+                 else "Tailscale not detected -- install/start it, then reopen Settings.")
+        hh2 = AppKit.NSTextField.labelWithString_(
+            "   " + reach + "  Enter this address + the token in the Android app.")
+        hh2.setFont_(AppKit.NSFont.systemFontOfSize_(11))
+        hh2.setTextColor_(AppKit.NSColor.secondaryLabelColor())
+        hh2.setFrame_(NSMakeRect(22, y, W - 44, 16))
+        content.addSubview_(hh2)
+        y -= 24
+
         # usage button
         bu = AppKit.NSButton.alloc().initWithFrame_(NSMakeRect(178, y, 220, 28))
         bu.setTitle_("Usage & History…")
@@ -380,6 +421,11 @@ class SettingsWindow:
                     threading.Thread(target=self.app.cleaner.ping, daemon=True).start()
             except Exception:
                 pass
+        elif key == "remote_enabled":
+            try:
+                self.app.set_remote_server(on)
+            except Exception as e:
+                self._alert("Couldn't start remote dictation", str(e))
         cfg = load_cfg()
         cfg[key] = on
         save_cfg(cfg)
@@ -387,7 +433,8 @@ class SettingsWindow:
     def _save(self):
         cfg = load_cfg()
         for key in ("cleanup_enabled", "smart_formatting", "keep_model_loaded", "island",
-                    "sounds", "auto_paste", "trailing_space", "notify", "learn_words"):
+                    "sounds", "auto_paste", "trailing_space", "notify", "learn_words",
+                    "remote_enabled", "remote_also_paste_locally"):
             cfg[key] = bool(self.controls[key].state())
         cfg["hotkey"] = dict(HOTKEYS).get(self.controls["hotkey"].titleOfSelectedItem(), "alt_l")
         cfg["mode"] = dict(MODES).get(self.controls["mode"].titleOfSelectedItem(), "hold_or_lock")
@@ -401,6 +448,11 @@ class SettingsWindow:
         cfg["ollama_model"] = om.strip() if om else "qwen3:8b"
         hm = self.controls["hindi_model"].titleOfSelectedItem() or ""
         cfg["hindi_model"] = "" if hm.startswith("(none") else hm.strip()
+        try:
+            cfg["remote_port"] = int(self.controls["remote_port"].stringValue())
+        except (ValueError, TypeError):
+            pass
+        cfg["remote_token"] = self.controls["remote_token"].stringValue()
         save_cfg(cfg)
         # live where possible
         self.app.cleanup_on = cfg["cleanup_enabled"]
@@ -412,6 +464,10 @@ class SettingsWindow:
         except Exception:
             pass
         globals_apply(cfg)
+        try:
+            self.app.set_remote_server(cfg["remote_enabled"])
+        except Exception:
+            pass
         self._save_dict(silent=True)
         self._alert("Saved",
                     "Settings saved. Hotkey / mode / model changes take effect "
@@ -444,6 +500,19 @@ class SettingsWindow:
         if getattr(self, "_usage_win", None) is None:
             self._usage_win = usage.UsageWindow()
         self._usage_win.show()
+
+    def _regen_token(self):
+        try:
+            import server as _remote_mod
+            token = _remote_mod.new_token()
+        except Exception:
+            import secrets
+            token = secrets.token_urlsafe(24)
+        self.controls["remote_token"].setStringValue_(token)
+        cfg = load_cfg()
+        cfg["remote_token"] = token
+        save_cfg(cfg)
+        globals_apply(cfg)
 
     # ---------- show ----------
     def show(self):

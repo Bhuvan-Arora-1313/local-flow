@@ -37,5 +37,13 @@
   "keep_model_loaded": true,
   "keep_model_loaded_note": "true = the Ollama cleanup model stays in RAM forever (no ~15s wake-up lag; uses that model's RAM even when idle).",
   "hindi_model": "gemma3:4b",
-  "hindi_model_note": "Small model used ONLY to romanise Devanagari when hindi_script=latin. Empty = use the main model. gemma3:4b (~3.3GB) transliterates reliably."
+  "hindi_model_note": "Small model used ONLY to romanise Devanagari when hindi_script=latin. Empty = use the main model. gemma3:4b (~3.3GB) transliterates reliably.",
+  "remote_enabled": false,
+  "remote_enabled_note": "Lets another device on your Tailscale tailnet (e.g. a phone) send audio and get back the same cleaned-up text the hotkey produces, over the existing models -- no second model load. Needs a remote_token set. Binds only to the Mac's Tailscale IP, never 0.0.0.0.",
+  "remote_port": 8765,
+  "remote_port_note": "Port the remote dictation server listens on. Changing this needs a restart (same as hotkey/model changes) to rebind the socket.",
+  "remote_token": "",
+  "remote_token_note": "Pairing secret the remote device must send as 'Authorization: Bearer <token>'. Generate one from Settings -- an empty token refuses all remote requests. Lives only in your local config.json, never committed.",
+  "remote_also_paste_locally": false,
+  "remote_also_paste_locally_note": "When true, text dictated from a remote device is ALSO pasted at the Mac's own cursor (handy if you're dictating into something open on the Mac itself). Off by default."
 }

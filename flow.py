@@ -57,6 +57,11 @@ try:
     import learn  # noqa: E402
 except Exception:
     learn = None
+try:
+    import server as remote  # noqa: E402
+except Exception as _e:
+    remote = None
+    print(f"[flow] remote dictation server unavailable: {_e}")
 
 DICT_PATH = os.path.join(BASE, "dictionary.txt")
 if not os.path.exists(DICT_PATH):
@@ -212,6 +217,8 @@ class App:
         self._ghost_text = ""
         self._ghost_busy = False
 
+        self.remote = remote.RemoteServer(self, lambda: CFG) if remote is not None else None
+
     def _reload_terms(self):
         terms, self.corrections = dictmod.load(DICT_PATH)
         if learn is not None:
@@ -239,6 +246,21 @@ class App:
         self._listener.start()
         if self.learner is not None and CFG.get("learn_words", False):
             self.learner.set_enabled(True)
+        if CFG.get("remote_enabled", False):
+            self.set_remote_server(True)
+
+    # ---------- remote dictation (phone/tablet over Tailscale) ----------
+    def set_remote_server(self, on: bool):
+        if self.remote is None:
+            return
+        if on:
+            if not CFG.get("remote_token", ""):
+                notify("LocalFlow", "Set a pairing token in Settings before enabling remote dictation")
+                return
+            if not self.remote.start(CFG.get("remote_port", 8765)):
+                notify("LocalFlow", "Couldn't start remote dictation — is Tailscale running?")
+        else:
+            self.remote.stop()
 
     # ---------- model ----------
     def _load_model(self):
@@ -647,6 +669,7 @@ def run_app(app: App):
             app.restart()
 
         def quitApp_(self, sender):
+            app.set_remote_server(False)
             AppKit.NSApp().terminate_(None)
 
     tgt = Target.alloc().init()
