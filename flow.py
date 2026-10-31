@@ -41,6 +41,7 @@ import numpy as np  # noqa: E402
 from pynput import keyboard  # noqa: E402
 from Quartz import (  # noqa: E402
     CGEventTapEnable, kCGEventTapDisabledByTimeout, kCGEventTapDisabledByUserInput,
+    CGEventSourceKeyState, kCGEventSourceStateHIDSystemState,
 )
 
 from recorder import Recorder  # noqa: E402
@@ -112,6 +113,15 @@ def play(kind: str):
 _OTHER_KEY_TTL = 5.0
 
 
+# macOS virtual keycodes for the hotkeys Settings offers -- used to ask the
+# OS whether the hotkey is physically held, independent of key events
+_HOTKEY_KEYCODES = {
+    "alt_l": 58, "alt_r": 61, "cmd_r": 54, "ctrl_r": 62, "shift_r": 60,
+    "f5": 96, "f6": 97, "f13": 105, "f14": 107, "f15": 113, "f16": 106,
+    "f17": 64, "f18": 79, "f19": 80,
+}
+
+
 def resolve_key(name: str):
     name = name.strip().lower()
     if hasattr(keyboard.Key, name):
@@ -166,6 +176,7 @@ class App:
         self._locked = False
         self._press_t = 0.0
         self._release_timer = None
+        self._key_up_since = None       # see _recover_missed_release
         self.mode = CFG.get("mode", "hold_or_lock")
         # chord guard: keys other than the hotkey currently held down, so a
         # bare-modifier hotkey (e.g. Option) doesn't fire when it's actually
@@ -246,8 +257,8 @@ class App:
                     romanize_hindi=(CFG.get("hindi_script", "devanagari") == "latin")),
                 daemon=True,
             ).start()
-        self._listener = _ResilientKeyListener(on_press=self._on_press, on_release=self._on_release)
-        self._listener.start()
+        self._listener = None
+        self._ensure_listener()
         if self.learner is not None and CFG.get("learn_words", False):
             self.learner.set_enabled(True)
         if CFG.get("remote_enabled", False):
@@ -294,6 +305,59 @@ class App:
             del self._other_down[k]
         return bool(self._other_down)
 
+    # ---------- hotkey robustness ----------
+    def _safe(self, fn):
+        # pynput stops the listener for good if a callback ever raises, which
+        # leaves the hotkey silently dead until LocalFlow is restarted
+        def wrapper(key):
+            try:
+                fn(key)
+            except Exception as e:
+                print(f"[flow] hotkey handler error (ignored): {e!r}")
+        return wrapper
+
+    def _ensure_listener(self):
+        """Starts the hotkey listener, or restarts it if it has died."""
+        if self._listener is not None and self._listener.is_alive():
+            return
+        if self._listener is not None:
+            print("[flow] hotkey listener had stopped — restarting it")
+        self._hotkey_down = False
+        self._chord = False
+        self._other_down.clear()
+        self._listener = _ResilientKeyListener(
+            on_press=self._safe(self._on_press), on_release=self._safe(self._on_release))
+        self._listener.start()
+
+    def _hotkey_physically_down(self):
+        code = _HOTKEY_KEYCODES.get(CFG.get("hotkey", "").strip().lower())
+        if code is None:
+            return None     # a hotkey we don't have a keycode for: can't tell
+        return bool(CGEventSourceKeyState(kCGEventSourceStateHIDSystemState, code))
+
+    def _recover_missed_release(self):
+        """Called 4x a second. If we're recording because the hotkey is held,
+        but macOS says the key is physically up, the key-up event was lost --
+        finish the recording instead of recording forever. Key events can be
+        dropped (e.g. macOS briefly disables the event tap while the mic is
+        being opened); the physical key state can't be."""
+        if (self.state != "rec" or self._locked or self.mode == "toggle"
+                or self._release_timer is not None):
+            self._key_up_since = None
+            return
+        down = self._hotkey_physically_down()
+        if down is None or down:
+            self._key_up_since = None
+            return
+        now = time.time()
+        if self._key_up_since is None:
+            self._key_up_since = now
+        elif now - self._key_up_since >= 0.3:
+            print("[flow] hotkey release was missed — key is up, finishing the recording")
+            self._key_up_since = None
+            self._hotkey_down = False
+            self._end()
+
     def _on_press(self, key):
         if self.learner is not None and self.learner.enabled:
             self.learner.feed(key)
@@ -332,6 +396,7 @@ class App:
                 # pending stop from a quick first tap -> this press is the 2nd
                 # tap of a double-tap: lock hands-free
                 self._locked = True
+                print("[flow] locked hands-free (double-tap) — tap the hotkey again to stop")
                 return
             self._begin()
 
@@ -416,6 +481,7 @@ class App:
                 notify("LocalFlow", "Couldn't start the microphone — try again")
                 return
         play("start")
+        print("[flow] recording started")
         if self.ghost is not None:
             # don't wait for the next periodic tick (up to
             # ghost_text_interval_seconds away) for the first preview
@@ -452,6 +518,7 @@ class App:
             return
         audio = self.rec.stop()
         dur = len(audio) / max(1, self.rec.sample_rate)
+        print(f"[flow] recording stopped ({dur:.1f}s)")
         if dur < CFG.get("min_record_seconds", 0.35):
             self.state = "idle"
             return
@@ -736,6 +803,8 @@ def run_app(app: App):
                 if timeout > 0 and time.time() - app._work_started_at > timeout:
                     app._abandon_stuck_job()
             app._resync_hotkey_state()
+            app._ensure_listener()
+            app._recover_missed_release()
             status_item.button().setTitle_(app.status_glyph())
             mi_status.setTitle_(app.status_label())
             if app.last_text:
