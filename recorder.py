@@ -11,6 +11,7 @@ Each band has its own auto-gain, so quiet high-frequency sounds (s, sh, t) still
 move the outer bars instead of sitting flat.
 """
 import threading
+import time
 import numpy as np
 import sounddevice as sd
 
@@ -31,6 +32,9 @@ class Recorder:
         self._level = 0.0
         self._agc = np.full(_NB, 1e-3, dtype=np.float32)  # per-band running max
         self._edges = self._band_edges()
+        # liveness: when the mic last delivered audio
+        self._got_audio = threading.Event()
+        self._last_audio = 0.0
 
     def _band_edges(self):
         freqs = np.fft.rfftfreq(_FFT, 1.0 / self.sample_rate)
@@ -41,6 +45,8 @@ class Recorder:
         mono = indata.reshape(-1).astype(np.float32)
         with self._frames_lock:
             self._frames.append(mono.copy())
+        self._last_audio = time.monotonic()
+        self._got_audio.set()
 
         rms = float(np.sqrt(np.mean(mono * mono)) + 1e-9)
         self._level = rms
@@ -64,7 +70,44 @@ class Recorder:
         norm *= float(np.clip(rms * 40.0, 0.0, 1.0))
         self._bands = norm.astype(np.float32)
 
+    # Seen in the wild: CoreAudio logs an "IO overload" right as the stream
+    # starts and the stream then delivers NOTHING -- LocalFlow shows it's
+    # recording while every word is lost, and only a full restart (which
+    # re-initialises PortAudio) fixes it. So never trust a started stream:
+    # wait for real audio, and if none arrives, re-initialise PortAudio and
+    # reopen -- the same thing the restart did.
+    START_WAIT_S = 0.5
+    START_ATTEMPTS = 3
+    STALL_S = 1.0
+
+    def _open(self):
+        self._got_audio.clear()
+        self._stream = sd.InputStream(
+            samplerate=self.sample_rate, channels=1, dtype="float32",
+            blocksize=0, callback=self._callback,
+        )
+        self._stream.start()
+
+    def _close(self):
+        s, self._stream = self._stream, None
+        if s is not None:
+            try:
+                s.stop()
+                s.close()
+            except Exception:
+                pass
+
+    @staticmethod
+    def _reinit_portaudio():
+        try:
+            sd._terminate()
+        except Exception:
+            pass
+        sd._initialize()
+
     def start(self):
+        """Opens the mic and returns once it is actually delivering audio.
+        Raises RuntimeError if it can't get live audio after retrying."""
         if self.recording:
             return
         with self._frames_lock:
@@ -72,22 +115,47 @@ class Recorder:
         self._bands = np.zeros(_NB, dtype=np.float32)
         self._level = 0.0
         self._agc = np.full(_NB, 1e-3, dtype=np.float32)
-        self._stream = sd.InputStream(
-            samplerate=self.sample_rate, channels=1, dtype="float32",
-            blocksize=0, callback=self._callback,
-        )
-        self._stream.start()
-        self.recording = True
+        last_err = None
+        for attempt in range(1, self.START_ATTEMPTS + 1):
+            try:
+                self._open()
+                if self._got_audio.wait(self.START_WAIT_S):
+                    self.recording = True
+                    if attempt > 1:
+                        print(f"[rec] microphone recovered on attempt {attempt}")
+                    return
+                print(f"[rec] microphone opened but delivered no audio (attempt {attempt}) "
+                      "— re-initialising audio")
+            except Exception as e:
+                last_err = e
+                print(f"[rec] microphone failed to open (attempt {attempt}): {e}")
+            self._close()
+            self._reinit_portaudio()
+        raise RuntimeError(f"microphone isn't delivering audio ({last_err or 'no data'})")
+
+    def stalled(self) -> bool:
+        """True if we're recording but the mic has gone silent at the driver
+        level (no callbacks at all -- not just a quiet room)."""
+        return self.recording and time.monotonic() - self._last_audio > self.STALL_S
+
+    def reopen(self) -> bool:
+        """Mid-recording recovery: reopen the stream, keeping everything
+        captured so far. Returns True once audio is flowing again."""
+        self._close()
+        self._reinit_portaudio()
+        try:
+            self._open()
+        except Exception as e:
+            print(f"[rec] reopening the microphone failed: {e}")
+            return False
+        return self._got_audio.wait(0.8)
 
     def stop(self) -> np.ndarray:
         if not self.recording:
+            self._close()
             return np.zeros(0, dtype=np.float32)
         self.recording = False
-        try:
-            self._stream.stop()
-            self._stream.close()
-        finally:
-            self._stream = None
+        self._close()
         with self._frames_lock:
             frames = list(self._frames)
         if not frames:

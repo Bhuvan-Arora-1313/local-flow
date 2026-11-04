@@ -160,6 +160,10 @@ class App:
         self.last_text = ""
         self.cleanup_on = CFG.get("cleanup_enabled", True)
         self._jobs: queue.Queue = queue.Queue()
+        # mic open/close runs here, never on the keyboard-listener thread: a
+        # slow or stuck audio call there makes macOS drop key events
+        self._ctl: queue.Queue = queue.Queue()
+        self._mic_recovering = False
         # NOTE: concurrent calls into the ASR model (hold-to-talk, ghost
         # preview, meeting transcription) are NOT serialized with a lock on
         # purpose -- verified directly that MLX/Metal handles concurrent
@@ -249,6 +253,7 @@ class App:
     def start_background(self):
         threading.Thread(target=self._load_model, daemon=True).start()
         threading.Thread(target=self._worker, daemon=True).start()
+        threading.Thread(target=self._control_loop, daemon=True).start()
         if self.cleanup_on:
             threading.Thread(
                 target=lambda: self.cleaner.available() and self.cleaner.warm(
@@ -405,8 +410,8 @@ class App:
         self._cancel_release_timer()
         self._locked = False
         if self.state == "rec":
-            self.rec.stop()
             self.state = "idle"
+            self._post(self.rec.stop)
 
     def _on_release(self, key):
         if key != self._hotkey:
@@ -454,32 +459,38 @@ class App:
     # regardless of how long the dictation runs.
     GHOST_WINDOW_SECONDS = 10.0
 
+    def _post(self, fn):
+        self._ctl.put(fn)
+
+    def _control_loop(self):
+        while True:
+            fn = self._ctl.get()
+            try:
+                fn()
+            except Exception as e:
+                print(f"[flow] mic control error: {e!r}")
+
     def _begin(self):
         if self.state != "idle":
             return
         self.state = "rec"
         self._ghost_text = ""
+        self._post(self._open_mic)
+
+    def _open_mic(self):
+        if self.state != "rec":
+            return          # released/cancelled before the mic got opened
         try:
+            # returns only once the mic is really delivering audio; resets
+            # the audio system and retries itself if it isn't
             self.rec.start()
         except Exception as e:
-            # Transient CoreAudio/PortAudio hiccups (e.g. right after a
-            # Bluetooth mic or virtual-device switch) often clear up if
-            # PortAudio re-scans the device list -- this is the usual fix
-            # for PaErrorCode -9986 (Internal PortAudio error). Try once
-            # more before giving up, since silently doing nothing here is
-            # exactly what makes the hotkey tap look like it was ignored.
-            print(f"[flow] mic start failed, retrying once: {e}")
-            try:
-                import sounddevice as sd
-                sd._terminate()
-                sd._initialize()
-                self.rec.start()
-            except Exception as e2:
-                print(f"[flow] mic start failed again, giving up: {e2}")
+            print(f"[flow] {e} — not recording")
+            if self.state == "rec":
                 self.state = "idle"
-                play("error")
-                notify("LocalFlow", "Couldn't start the microphone — try again")
-                return
+            play("error")
+            notify("LocalFlow", "Microphone isn't delivering audio — not recording. Try again.")
+            return
         play("start")
         print("[flow] recording started")
         if self.ghost is not None:
@@ -488,6 +499,28 @@ class App:
             t = threading.Timer(0.35, self._ghost_tick)
             t.daemon = True
             t.start()
+
+    def _check_mic(self):
+        """Status-timer check: a mic that goes silent at the driver level
+        mid-recording gets reopened, keeping what was already captured."""
+        if self.state == "rec" and self.rec.stalled() and not self._mic_recovering:
+            self._mic_recovering = True
+            self._post(self._recover_mic)
+
+    def _recover_mic(self):
+        try:
+            if self.state != "rec":
+                return
+            print("[flow] microphone went silent mid-recording — reopening it")
+            if self.rec.reopen():
+                print("[flow] microphone reopened, still recording")
+                return
+            print("[flow] microphone couldn't be reopened — transcribing what was captured")
+            play("error")
+            notify("LocalFlow", "Microphone stopped delivering audio — transcribing what was captured.")
+            self._end()
+        finally:
+            self._mic_recovering = False
 
     def _ghost_tick(self):
         """Kick off one live-preview re-transcription, if one isn't already
@@ -516,13 +549,17 @@ class App:
     def _end(self):
         if self.state != "rec":
             return
+        self.state = "work"
+        self._work_started_at = time.time()
+        self._post(self._close_mic)
+
+    def _close_mic(self):
         audio = self.rec.stop()
         dur = len(audio) / max(1, self.rec.sample_rate)
         print(f"[flow] recording stopped ({dur:.1f}s)")
         if dur < CFG.get("min_record_seconds", 0.35):
             self.state = "idle"
             return
-        self.state = "work"
         self._work_job_id += 1
         self._work_started_at = time.time()
         self._jobs.put((self._work_job_id, audio))
@@ -618,8 +655,8 @@ class App:
         self._chord = False
         if self.state == "rec":
             print("[flow] recording cancelled by user")
-            self.rec.stop()
             self.state = "idle"
+            self._post(self.rec.stop)
             play("error")
         elif self.state == "work":
             print("[flow] transcription cancelled by user")
@@ -805,6 +842,7 @@ def run_app(app: App):
             app._resync_hotkey_state()
             app._ensure_listener()
             app._recover_missed_release()
+            app._check_mic()
             status_item.button().setTitle_(app.status_glyph())
             mi_status.setTitle_(app.status_label())
             if app.last_text:
