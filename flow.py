@@ -478,6 +478,15 @@ class App:
     def _begin(self):
         if self.state != "idle":
             return
+        # put the island on the display you're working on (not always the
+        # "main" one): mouse's screen at once, the focused window's when known
+        try:
+            import island as islandmod
+            islandmod.set_focus_point(None)
+            threading.Thread(target=lambda: islandmod.set_focus_point(ctxmod.focus_point()),
+                             daemon=True).start()
+        except Exception:
+            pass
         self.state = "rec"
         self._ghost_text = ""
         self._post(self._open_mic)

@@ -17,6 +17,31 @@ _BTN_MARGIN = 4.0
 _CONTENT_X0 = _BTN_MARGIN + _BTN_D + 6.0   # waveform area starts after the button
 _W, _H = 96.0 + _CONTENT_X0 - _PAD_X, 24.0
 
+# Where the user is working right now (Cocoa screen coordinates), set by
+# LocalFlow when a recording starts. With two displays, mainScreen() is not
+# "the screen you're looking at" for a menu-bar app -- the island used to
+# appear on the other display, so it looked like it never showed up.
+_focus = {"pt": None, "t": 0.0}
+
+
+def set_focus_point(pt):
+    _focus["pt"], _focus["t"] = pt, time.time()
+
+
+def _target_screen():
+    screens = list(AppKit.NSScreen.screens() or [])
+    pt = _focus["pt"] if _focus["pt"] and time.time() - _focus["t"] < 120 else None
+    if pt is None:
+        m = AppKit.NSEvent.mouseLocation()
+        pt = (m.x, m.y)
+    for sc in screens:
+        f = sc.frame()
+        if (f.origin.x <= pt[0] < f.origin.x + f.size.width
+                and f.origin.y <= pt[1] < f.origin.y + f.size.height):
+            return sc
+    return AppKit.NSScreen.mainScreen() or (screens[0] if screens else None)
+
+
 _CB = (
     (1 << 0)   # CanJoinAllSpaces
     | (1 << 4)  # Stationary
@@ -196,7 +221,7 @@ class Island:
         # screen rather than silently leaving the panel unpositioned (which
         # would leave it sitting at its initial (0,0) origin the first time
         # this happens, off in a corner instead of invisible, but wrong).
-        screen = AppKit.NSScreen.mainScreen()
+        screen = _target_screen()
         if screen is None:
             screens = AppKit.NSScreen.screens()
             screen = screens[0] if screens else None
@@ -219,6 +244,7 @@ class Island:
     def show(self):
         self._ensure()
         self._reposition()
+        self._placed_at = time.time()
         self.panel.orderFrontRegardless()
         self.panel.invalidateShadow()
         self._visible = True
@@ -230,6 +256,10 @@ class Island:
 
     def tick(self):
         if self._visible and self.view is not None:
+            # the focused window's screen arrived after we were shown
+            if _focus["t"] > getattr(self, "_placed_at", 0.0):
+                self._reposition()
+                self._placed_at = time.time()
             self.view.tick()
 
 
@@ -316,7 +346,7 @@ class GhostText:
         self.panel = p
 
     def _reposition(self):
-        screen = AppKit.NSScreen.mainScreen()
+        screen = _target_screen()
         if screen is None:
             screens = AppKit.NSScreen.screens()
             screen = screens[0] if screens else None
@@ -400,7 +430,7 @@ class Toast:
         self.panel = p
 
     def _position(self):
-        screen = AppKit.NSScreen.mainScreen()
+        screen = _target_screen()
         if screen is None:
             return
         vf = screen.visibleFrame()

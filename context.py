@@ -199,3 +199,33 @@ def terms(text, limit=60):
         if _distinctive(tok, common):
             score[tok] = score.get(tok, 0.0) + 1.0 + i / n     # later = more recent
     return [t for t, _ in sorted(score.items(), key=lambda kv: -kv[1])[:limit]]
+
+
+def focus_point():
+    """Centre of the focused window of the app you're typing into, in Cocoa
+    screen coordinates (origin bottom-left of the primary display), or the
+    mouse position if that can't be read. Short AX timeout: never stalls."""
+    try:
+        import AppKit
+        import HIServices as H
+        app = AppKit.NSWorkspace.sharedWorkspace().frontmostApplication()
+        ax = H.AXUIElementCreateApplication(app.processIdentifier())
+        H.AXUIElementSetMessagingTimeout(ax, 0.25)
+        win = _ax_get(ax, "AXFocusedWindow")
+        pos = _ax_get(win, "AXPosition") if win is not None else None
+        size = _ax_get(win, "AXSize") if win is not None else None
+        if pos is not None and size is not None:
+            ok1, p = H.AXValueGetValue(pos, H.kAXValueCGPointType, None)
+            ok2, s = H.AXValueGetValue(size, H.kAXValueCGSizeType, None)
+            if ok1 and ok2:
+                primary = AppKit.NSScreen.screens()[0].frame().size.height
+                # AX: top-left origin, y down from the primary display's top
+                return (p.x + s.width / 2.0, primary - (p.y + s.height / 2.0))
+    except Exception:
+        pass
+    try:
+        import AppKit
+        m = AppKit.NSEvent.mouseLocation()
+        return (m.x, m.y)
+    except Exception:
+        return None
