@@ -107,26 +107,31 @@ def _strip(text: str) -> str:
     return re.sub(r"\s+", " ", s).strip()
 
 
-AUTO_PROMPT = """Add one or two emojis that fit the mood of this chat message, the way a \
+AUTO_PROMPT = """Add one or two emojis to the MESSAGE that fit its mood, the way a \
 person texting would. Put each emoji right after the phrase it belongs to or at the end.
 
 STRICT: copy every word, letter, number and punctuation mark exactly as given -- same \
 language, same spelling, same order. Do not translate, correct, add or remove any word. \
 Only insert emojis. If no emoji fits, return the message unchanged.
 
-Return ONLY the message."""
+Return ONLY the MESSAGE (with the emojis)."""
 
 
-def auto(text: str, url: str, model: str, keep_alive="30m", timeout: float = 8.0) -> str:
+def auto(text: str, url: str, model: str, keep_alive="30m", timeout: float = 8.0,
+         chat: str = "") -> str:
     """Suggest emojis via the local model; keep them only if nothing else changed.
     num_ctx and keep_alive MUST match the cleanup call's: Ollama reloads the
     model whenever num_ctx changes, and keep_alive resets its unload timer."""
     body = text.strip()
     if not body or _EMOJI_CHARS.search(body):    # already has emojis (spoken ones)
         return text
+    prompt = f"MESSAGE:\n{body}\n\n/no_think"
+    if chat.strip():
+        prompt = ("RECENT CHAT, for the mood only -- do not copy any of it:\n" + chat.strip()
+                  + "\n\n" + prompt)
     try:
         r = requests.post(f"{url}/api/generate", json={
-            "model": model, "system": AUTO_PROMPT, "prompt": body + "\n\n/no_think",
+            "model": model, "system": AUTO_PROMPT, "prompt": prompt,
             "stream": False, "think": False, "keep_alive": keep_alive,
             "options": {"temperature": 0.3, "num_ctx": 8192},
         }, timeout=timeout)

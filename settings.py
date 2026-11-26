@@ -240,6 +240,7 @@ class SettingsWindow:
         check("smart_formatting", "Smart formatting — spoken lists become bullets / numbers")
         check("spoken_emoji", "Spoken emojis — say “smiley emoji”, “thumbs up emoji” …")
         check("auto_emoji", "Auto emojis in chat apps (WhatsApp, Messages, Slack …)", default=False)
+        check("screen_context", "Use on-screen names & terms (read locally while you talk)")
         check("keep_model_loaded", "Keep the AI model always loaded — no wake-up lag (more RAM)")
         check("island", "Show the waveform island while dictating")
         check("sounds", "Play start / done sounds")
@@ -436,7 +437,7 @@ class SettingsWindow:
         cfg = load_cfg()
         for key in ("cleanup_enabled", "smart_formatting", "keep_model_loaded", "island",
                     "sounds", "auto_paste", "trailing_space", "notify", "learn_words",
-                    "spoken_emoji", "auto_emoji",
+                    "spoken_emoji", "auto_emoji", "screen_context",
                     "remote_enabled", "remote_also_paste_locally"):
             cfg[key] = bool(self.controls[key].state())
         cfg["hotkey"] = dict(HOTKEYS).get(self.controls["hotkey"].titleOfSelectedItem(), "alt_l")

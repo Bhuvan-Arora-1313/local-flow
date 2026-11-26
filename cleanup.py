@@ -225,7 +225,8 @@ class Cleaner:
         return _unwrap_quotes(_strip_think(r.json().get("response", "")))
 
     def clean(self, raw: str, glossary: list[str], _timeout: int | None = None,
-              smart_format: bool = True, romanize_hindi: bool = False) -> str:
+              smart_format: bool = True, romanize_hindi: bool = False,
+              screen_terms: list[str] | None = None) -> str:
         raw = raw.strip()
         if not raw:
             return raw
@@ -267,7 +268,14 @@ class Cleaner:
             ).replace("{SCRIPT_RULE}", SCRIPT_DEVANAGARI)
         # Stable prefix (glossary) first, variable part (transcript) last -> Ollama
         # reuses the KV cache across dictations.
-        user = f"GLOSSARY:\n{gloss}\n\nRAW_TRANSCRIPT:\n{raw}\n\n/no_think"
+        # On-screen names/terms go AFTER the glossary so the cached prefix
+        # (system + glossary) still matches between dictations.
+        screen = ""
+        if screen_terms:
+            screen = ("ON SCREEN NOW (names/terms visible where the speaker is typing -- if a "
+                      "transcript word sounds like one of these, use this exact spelling; never "
+                      "insert them otherwise):\n" + ", ".join(screen_terms) + "\n\n")
+        user = f"GLOSSARY:\n{gloss}\n\n{screen}RAW_TRANSCRIPT:\n{raw}\n\n/no_think"
         payload = {
             "model": self.model,
             "prompt": user,

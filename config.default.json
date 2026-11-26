@@ -49,5 +49,7 @@
   "spoken_emoji": true,
   "spoken_emoji_note": "Say \"smiley emoji\", \"thumbs up emoji\", \"fire emoji\"... and the emoji is inserted. Needs the word 'emoji', so normal sentences are never touched.",
   "auto_emoji": false,
-  "auto_emoji_note": "Adds 1-2 fitting emojis, only when dictating into a chat app (WhatsApp, Messages, Slack, Telegram, Discord, or a browser tab titled like one). Kept only if no word changed. Uses the cleanup model (~0.5-1s extra)."
+  "auto_emoji_note": "Adds 1-2 fitting emojis, only when dictating into a chat app (WhatsApp, Messages, Slack, Telegram, Discord, or a browser tab titled like one). Kept only if no word changed. Uses the cleanup model (~0.5-1s extra).",
+  "screen_context": true,
+  "screen_context_note": "While you talk, reads names/terms near where you're typing (focused window text; in terminals also the recent Claude Code conversation) and gives them to the cleanup step as spelling hints. Local only, kept in memory for one dictation."
 }

@@ -63,6 +63,7 @@ try:
 except Exception:
     learn = None
 import emoji as emojimod  # noqa: E402
+import context as ctxmod  # noqa: E402
 try:
     import server as remote  # noqa: E402
 except Exception as _e:
@@ -164,6 +165,9 @@ class App:
         # mic open/close runs here, never on the keyboard-listener thread: a
         # slow or stuck audio call there makes macOS drop key events
         self._ctl: queue.Queue = queue.Queue()
+        self._ctx = None
+        self._ctx_done = threading.Event()
+        self._ctx_done.set()
         self._mic_recovering = False
         # NOTE: concurrent calls into the ASR model (hold-to-talk, ghost
         # preview, meeting transcription) are NOT serialized with a lock on
@@ -496,12 +500,30 @@ class App:
         print("[flow] recording started")
         # the app you're dictating into (for chat-only automatic emojis)
         self._target = emojimod.frontmost() if CFG.get("auto_emoji", False) else ("", "")
+        # names/terms around where you're typing -- read while you talk
+        self._ctx = None
+        self._ctx_done.clear()
+        if CFG.get("screen_context", True):
+            threading.Thread(target=self._grab_context, daemon=True).start()
+        else:
+            self._ctx_done.set()
         if self.ghost is not None:
             # don't wait for the next periodic tick (up to
             # ghost_text_interval_seconds away) for the first preview
             t = threading.Timer(0.35, self._ghost_tick)
             t.daemon = True
             t.start()
+
+    def _grab_context(self):
+        try:
+            c = ctxmod.capture()
+            c["terms"] = ctxmod.terms(c["text"])
+            self._ctx = c
+            print(f"[context] {c['bid'] or '?'}: {len(c['terms'])} names/terms on screen")
+        except Exception as e:
+            print(f"[context] failed: {e}")
+        finally:
+            self._ctx_done.set()
 
     def _check_mic(self):
         """Status-timer check: a mic that goes silent at the driver level
@@ -581,9 +603,11 @@ class App:
                 text = dictmod.tidy_commas(text)
                 text = dictmod.apply_literal_corrections(text, self.corrections)
                 text = dictmod.normalize_acronyms(text, self.acronyms)
+                self._ctx_done.wait(0.5)
+                ctx = self._ctx or {}
                 if self.cleanup_on and self.cleaner.available():
                     text = self.cleaner.clean(
-                        text, self.terms,
+                        text, self.terms, screen_terms=ctx.get("terms"),
                         smart_format=CFG.get("smart_formatting", True),
                         romanize_hindi=(CFG.get("hindi_script", "devanagari") == "latin"))
                 elif text:
@@ -593,7 +617,8 @@ class App:
                 if (CFG.get("auto_emoji", False) and text
                         and emojimod.is_chat(getattr(self, "_target", None))):
                     text = emojimod.auto(text, CFG["ollama_url"], CFG["ollama_model"],
-                                         keep_alive=self.cleaner.keep_alive)
+                                         keep_alive=self.cleaner.keep_alive,
+                                         chat=ctx.get("text", "")[-1200:])
                 t2 = time.time()
                 text = text.strip()
                 if CFG.get("trailing_space", True) and text:
@@ -770,6 +795,18 @@ def run_app(app: App):
             except Exception as e:
                 print(f"[flow] couldn't save auto_emoji: {e}")
 
+        def toggleScreenContext_(self, sender):
+            on = not CFG.get("screen_context", True)
+            CFG["screen_context"] = on
+            sender.setState_(1 if on else 0)
+            try:
+                import settings
+                cfg = settings.load_cfg()
+                cfg["screen_context"] = on
+                settings.save_cfg(cfg)
+            except Exception as e:
+                print(f"[flow] couldn't save screen_context: {e}")
+
         def reloadDict_(self, sender):
             app.reload_dict()
 
@@ -821,6 +858,8 @@ def run_app(app: App):
     mi_cleanup.setState_(1 if app.cleanup_on else 0)
     mi_emoji = add("Auto emojis in chat apps", b"toggleAutoEmoji:")
     mi_emoji.setState_(1 if CFG.get("auto_emoji", False) else 0)
+    mi_ctx = add("Use on-screen names & terms", b"toggleScreenContext:")
+    mi_ctx.setState_(1 if CFG.get("screen_context", True) else 0)
     add("Copy last transcript", b"copyLast:")
     menu.addItem_(AppKit.NSMenuItem.separatorItem())
     add("Settings…", b"openSettings:", ",")
@@ -848,7 +887,7 @@ def run_app(app: App):
         pass
     status_item.setMenu_(menu)
     # keep strong refs so nothing is GC'd out of the menu bar
-    app._ui = (NSApp, tgt, menu, status_item, mi_status, mi_last, mi_cleanup, mi_emoji)
+    app._ui = (NSApp, tgt, menu, status_item, mi_status, mi_last, mi_cleanup, mi_emoji, mi_ctx)
     print(f"[flow] statusBar={bar!r} item={status_item!r} button={btn!r} "
           f"visible={getattr(status_item, 'isVisible', lambda: '?')()}")
 
