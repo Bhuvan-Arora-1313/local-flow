@@ -2,12 +2,12 @@
 
 This mirrors what Wispr Flow does after raw transcription. All local.
 """
-import difflib
 import re
 import json
 import requests
 
 import hinglish
+import hints
 
 SYSTEM_PROMPT = """You edit raw dictation (RAW_TRANSCRIPT) into clean written text. A GLOSSARY of the \
 speaker's terms is provided. You MUST actively edit - do not echo the input back.
@@ -153,61 +153,6 @@ def select_glossary(terms: list[str], cap: int) -> list[str]:
     return (priority + plain)[:cap]
 
 
-def _norm(s: str) -> str:
-    return re.sub(r"[^a-z0-9]", "", s.lower())
-
-
-_term_index_cache = {}
-
-
-def _term_index(terms):
-    key = id(terms), len(terms)
-    idx = _term_index_cache.get(key)
-    if idx is None:
-        idx = {}
-        for t in terms:
-            n = _norm(t)
-            if len(n) >= 3:
-                idx.setdefault(n[0], []).append((n, t))
-        _term_index_cache.clear()
-        _term_index_cache[key] = idx
-    return idx
-
-
-def relevant_terms(raw: str, terms: list[str], limit: int = 12) -> list[str]:
-    """Dictionary entries that look/sound like something in THIS transcript
-    (Quen ~ Qwen, low RA ~ LoRA, Rahool ~ Rahul, Prakruti ~ Prakriti).
-    The fixed glossary can only hold a few hundred of the dictionary's
-    thousands of terms; this makes the rest reachable when they matter."""
-    words = re.findall(r"[A-Za-z0-9]+", raw)
-    if not words or not terms:
-        return []
-    idx = _term_index(terms)
-    grams = set()
-    for n in (1, 2, 3):
-        for i in range(len(words) - n + 1):
-            g = _norm("".join(words[i:i + n]))
-            if len(g) >= 3:
-                grams.add(g)
-    best = {}
-    for g in grams:
-        for tn, t in idx.get(g[0], ()):
-            if abs(len(tn) - len(g)) > max(2, len(tn) // 3):
-                continue
-            sm = difflib.SequenceMatcher(None, g, tn)
-            if sm.real_quick_ratio() < 0.75 or sm.quick_ratio() < 0.75:
-                continue
-            r = sm.ratio()
-            if r >= 0.75 and r > best.get(t, 0):
-                best[t] = r
-    out, seen = [], set()
-    for t, _ in sorted(best.items(), key=lambda kv: -kv[1]):
-        if t.lower() not in seen:          # lambda / Lambda -> one hint
-            seen.add(t.lower())
-            out.append(t)
-    return out[:limit]
-
-
 _DEVANAGARI = re.compile(r"[ऀ-ॿ]")
 
 # Small models translate Hindi if the prompt mentions anything but transliteration,
@@ -295,7 +240,8 @@ class Cleaner:
         # output is already punctuated; a fixed transliteration can only
         # spell what it heard.
         if romanize_hindi and (hinglish.has_devanagari(raw) or hinglish.looks_hinglish(raw)):
-            return hinglish.tidy(hinglish.romanize(raw))
+            known = list(screen_terms or []) + list(glossary or [])
+            return hinglish.tidy(hints.fix_names(hinglish.romanize(raw), known))
 
         # Hindi -> Roman: if the ASR still emitted Devanagari (normally it
         # shouldn't once primed to output romanised Hinglish directly -- see
@@ -326,13 +272,23 @@ class Cleaner:
         # reuses the KV cache across dictations.
         # On-screen names/terms go AFTER the glossary so the cached prefix
         # (system + glossary) still matches between dictations.
-        hints = [t for t in relevant_terms(raw, glossary) if t not in gl]
-        hints += [t for t in (screen_terms or []) if t not in hints]
+        # Exact "heard -> meant" pairs: a small model ignores a bare list of
+        # hints far more often than an explicit pointer at the suspect words.
+        pairs = hints.matches(raw, glossary or [])
+        if screen_terms:
+            pairs += [p for p in hints.matches(raw, list(screen_terms))
+                      if p[0] not in {q[0] for q in pairs}]
+        meant = {t for _, t, _ in pairs}
+        others = [t for t in (screen_terms or []) if t not in meant][:40]
         screen = ""
-        if hints:
-            screen = ("LIKELY NAMES/TERMS for this transcript (from the speaker's dictionary and "
-                      "their screen) -- if a transcript word sounds like one of these, use this "
-                      "exact spelling; never insert them otherwise:\n" + ", ".join(hints) + "\n\n")
+        if pairs:
+            screen += ("LIKELY MISHEARD in this transcript (sounds like one of the speaker's names/"
+                       "terms) -- replace each with the given spelling unless it clearly doesn't "
+                       "fit the meaning:\n"
+                       + "\n".join(f'  "{s}" -> {t}' for s, t, _ in pairs) + "\n\n")
+        if others:
+            screen += ("OTHER NAMES/TERMS ON SCREEN (spelling reference only; never insert them):\n"
+                       + ", ".join(others) + "\n\n")
         user = f"GLOSSARY:\n{gloss}\n\n{screen}RAW_TRANSCRIPT:\n{raw}\n\n/no_think"
         payload = {
             "model": self.model,
