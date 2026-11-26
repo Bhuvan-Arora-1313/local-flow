@@ -78,7 +78,8 @@ _NAMES = sorted(_NAMED, key=len, reverse=True)
 # "emoji" as Whisper may spell it, incl. romanised from Devanagari (इमोजी -> imoji)
 _EMOJI_WORD = r"(?:emoji|emojis|emojee|imoji|imojee|emoticon)"
 _SPOKEN = re.compile(
-    r"(?:\b(?:an?|the)\s+)?\b(" + "|".join(re.escape(n) for n in _NAMES) + r")[\s-]+" + _EMOJI_WORD + r"\b"
+    r"(?:\b(?P<det>an?|the|this|that|which|what|some|any|every|each|one|another|my|your|his|her|their)"
+    r"\s+)?\b(" + "|".join(re.escape(n) for n in _NAMES) + r")[\s-]+" + _EMOJI_WORD + r"\b"
     r"\.?",
     re.IGNORECASE)
 
@@ -94,7 +95,11 @@ def spoken(text: str) -> str:
         return text
 
     def rep(m):
-        return " " + _NAMED[m.group(1).lower()] + " "
+        # "it puts a sad emoji there" is TALKING about an emoji, not asking
+        # for one -- a command has no article: "that's great, smiley emoji"
+        if m.group("det"):
+            return m.group(0)
+        return " " + _NAMED[m.group(2).lower()] + " "
 
     s = _SPOKEN.sub(rep, text)
     s = re.sub(r"[ \t]{2,}", " ", s)
@@ -112,7 +117,8 @@ person texting would. Put each emoji right after the phrase it belongs to or at 
 
 STRICT: copy every word, letter, number and punctuation mark exactly as given -- same \
 language, same spelling, same order. Do not translate, correct, add or remove any word. \
-Only insert emojis. If no emoji fits, return the message unchanged.
+Only insert emojis. Match what the message actually MEANS, including negation \
+("I'm not sad" is not sad; "no worries" is relaxed). If no emoji fits, return the message unchanged.
 
 Return ONLY the MESSAGE (with the emojis)."""
 

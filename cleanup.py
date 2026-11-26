@@ -2,6 +2,7 @@
 
 This mirrors what Wispr Flow does after raw transcription. All local.
 """
+import difflib
 import re
 import json
 import requests
@@ -152,6 +153,61 @@ def select_glossary(terms: list[str], cap: int) -> list[str]:
     return (priority + plain)[:cap]
 
 
+def _norm(s: str) -> str:
+    return re.sub(r"[^a-z0-9]", "", s.lower())
+
+
+_term_index_cache = {}
+
+
+def _term_index(terms):
+    key = id(terms), len(terms)
+    idx = _term_index_cache.get(key)
+    if idx is None:
+        idx = {}
+        for t in terms:
+            n = _norm(t)
+            if len(n) >= 3:
+                idx.setdefault(n[0], []).append((n, t))
+        _term_index_cache.clear()
+        _term_index_cache[key] = idx
+    return idx
+
+
+def relevant_terms(raw: str, terms: list[str], limit: int = 12) -> list[str]:
+    """Dictionary entries that look/sound like something in THIS transcript
+    (Quen ~ Qwen, low RA ~ LoRA, Rahool ~ Rahul, Prakruti ~ Prakriti).
+    The fixed glossary can only hold a few hundred of the dictionary's
+    thousands of terms; this makes the rest reachable when they matter."""
+    words = re.findall(r"[A-Za-z0-9]+", raw)
+    if not words or not terms:
+        return []
+    idx = _term_index(terms)
+    grams = set()
+    for n in (1, 2, 3):
+        for i in range(len(words) - n + 1):
+            g = _norm("".join(words[i:i + n]))
+            if len(g) >= 3:
+                grams.add(g)
+    best = {}
+    for g in grams:
+        for tn, t in idx.get(g[0], ()):
+            if abs(len(tn) - len(g)) > max(2, len(tn) // 3):
+                continue
+            sm = difflib.SequenceMatcher(None, g, tn)
+            if sm.real_quick_ratio() < 0.75 or sm.quick_ratio() < 0.75:
+                continue
+            r = sm.ratio()
+            if r >= 0.75 and r > best.get(t, 0):
+                best[t] = r
+    out, seen = [], set()
+    for t, _ in sorted(best.items(), key=lambda kv: -kv[1]):
+        if t.lower() not in seen:          # lambda / Lambda -> one hint
+            seen.add(t.lower())
+            out.append(t)
+    return out[:limit]
+
+
 _DEVANAGARI = re.compile(r"[ऀ-ॿ]")
 
 # Small models translate Hindi if the prompt mentions anything but transliteration,
@@ -270,11 +326,13 @@ class Cleaner:
         # reuses the KV cache across dictations.
         # On-screen names/terms go AFTER the glossary so the cached prefix
         # (system + glossary) still matches between dictations.
+        hints = [t for t in relevant_terms(raw, glossary) if t not in gl]
+        hints += [t for t in (screen_terms or []) if t not in hints]
         screen = ""
-        if screen_terms:
-            screen = ("ON SCREEN NOW (names/terms visible where the speaker is typing -- if a "
-                      "transcript word sounds like one of these, use this exact spelling; never "
-                      "insert them otherwise):\n" + ", ".join(screen_terms) + "\n\n")
+        if hints:
+            screen = ("LIKELY NAMES/TERMS for this transcript (from the speaker's dictionary and "
+                      "their screen) -- if a transcript word sounds like one of these, use this "
+                      "exact spelling; never insert them otherwise:\n" + ", ".join(hints) + "\n\n")
         user = f"GLOSSARY:\n{gloss}\n\n{screen}RAW_TRANSCRIPT:\n{raw}\n\n/no_think"
         payload = {
             "model": self.model,
