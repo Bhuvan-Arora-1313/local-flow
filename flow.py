@@ -62,6 +62,7 @@ try:
     import learn  # noqa: E402
 except Exception:
     learn = None
+import emoji as emojimod  # noqa: E402
 try:
     import server as remote  # noqa: E402
 except Exception as _e:
@@ -493,6 +494,8 @@ class App:
             return
         play("start")
         print("[flow] recording started")
+        # the app you're dictating into (for chat-only automatic emojis)
+        self._target = emojimod.frontmost() if CFG.get("auto_emoji", False) else ("", "")
         if self.ghost is not None:
             # don't wait for the next periodic tick (up to
             # ghost_text_interval_seconds away) for the first preview
@@ -585,6 +588,11 @@ class App:
                         romanize_hindi=(CFG.get("hindi_script", "devanagari") == "latin"))
                 elif text:
                     text = text[0].upper() + text[1:]
+                if CFG.get("spoken_emoji", True):
+                    text = emojimod.spoken(text)
+                if (CFG.get("auto_emoji", False) and text
+                        and emojimod.is_chat(getattr(self, "_target", None))):
+                    text = emojimod.auto(text, CFG["ollama_url"], CFG["ollama_model"])
                 t2 = time.time()
                 text = text.strip()
                 if CFG.get("trailing_space", True) and text:
@@ -749,6 +757,18 @@ def run_app(app: App):
             app.cleanup_on = not app.cleanup_on
             sender.setState_(1 if app.cleanup_on else 0)
 
+        def toggleAutoEmoji_(self, sender):
+            on = not CFG.get("auto_emoji", False)
+            CFG["auto_emoji"] = on
+            sender.setState_(1 if on else 0)
+            try:
+                import settings
+                cfg = settings.load_cfg()
+                cfg["auto_emoji"] = on
+                settings.save_cfg(cfg)
+            except Exception as e:
+                print(f"[flow] couldn't save auto_emoji: {e}")
+
         def reloadDict_(self, sender):
             app.reload_dict()
 
@@ -798,6 +818,8 @@ def run_app(app: App):
     menu.addItem_(AppKit.NSMenuItem.separatorItem())
     mi_cleanup = add("AI cleanup", b"toggleCleanup:")
     mi_cleanup.setState_(1 if app.cleanup_on else 0)
+    mi_emoji = add("Auto emojis in chat apps", b"toggleAutoEmoji:")
+    mi_emoji.setState_(1 if CFG.get("auto_emoji", False) else 0)
     add("Copy last transcript", b"copyLast:")
     menu.addItem_(AppKit.NSMenuItem.separatorItem())
     add("Settings…", b"openSettings:", ",")
@@ -825,7 +847,7 @@ def run_app(app: App):
         pass
     status_item.setMenu_(menu)
     # keep strong refs so nothing is GC'd out of the menu bar
-    app._ui = (NSApp, tgt, menu, status_item, mi_status, mi_last, mi_cleanup)
+    app._ui = (NSApp, tgt, menu, status_item, mi_status, mi_last, mi_cleanup, mi_emoji)
     print(f"[flow] statusBar={bar!r} item={status_item!r} button={btn!r} "
           f"visible={getattr(status_item, 'isVisible', lambda: '?')()}")
 

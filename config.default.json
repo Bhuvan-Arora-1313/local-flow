@@ -11,7 +11,7 @@
   "asr_language": "auto",
   "asr_language_note": "Only used by the Whisper speech model. 'auto' = detect; 'hi' for Hindi/Hinglish. Parakeet ignores this.",
   "hindi_script": "devanagari",
-  "hindi_script_note": "'devanagari' keeps Hindi in \u0939\u093f\u0902\u0926\u0940 script; 'latin' romanises it to casual Hinglish (needs AI cleanup on).",
+  "hindi_script_note": "'devanagari' keeps Hindi in हिंदी script; 'latin' romanises it to casual Hinglish (needs AI cleanup on).",
   "sample_rate": 16000,
   "learn_words": true,
   "learn_words_note": "Watches your typing ONLY for learn_correction_window_seconds right after a dictation is pasted/copied -- not continuously. The idea: if you go back and retype a misheard word, that's learned immediately. Unusual (not English, not already known) single-word tokens only, never phrases; password fields are excluded by macOS; every add shows an Undo toast.",
@@ -45,5 +45,9 @@
   "remote_token": "",
   "remote_token_note": "Pairing secret the remote device must send as 'Authorization: Bearer <token>'. Generate one from Settings -- an empty token refuses all remote requests. Lives only in your local config.json, never committed.",
   "remote_also_paste_locally": false,
-  "remote_also_paste_locally_note": "When true, text dictated from a remote device is ALSO pasted at the Mac's own cursor (handy if you're dictating into something open on the Mac itself). Off by default."
+  "remote_also_paste_locally_note": "When true, text dictated from a remote device is ALSO pasted at the Mac's own cursor (handy if you're dictating into something open on the Mac itself). Off by default.",
+  "spoken_emoji": true,
+  "spoken_emoji_note": "Say \"smiley emoji\", \"thumbs up emoji\", \"fire emoji\"... and the emoji is inserted. Needs the word 'emoji', so normal sentences are never touched.",
+  "auto_emoji": false,
+  "auto_emoji_note": "Adds 1-2 fitting emojis, only when dictating into a chat app (WhatsApp, Messages, Slack, Telegram, Discord, or a browser tab titled like one). Kept only if no word changed. Uses the cleanup model (~0.5-1s extra)."
 }

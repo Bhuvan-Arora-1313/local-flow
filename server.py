@@ -26,6 +26,7 @@ from fastapi.responses import JSONResponse
 import uvicorn
 
 import dictionary as dictmod
+import emoji as emojimod
 import inserter
 try:
     import usage
@@ -116,6 +117,8 @@ class RemoteServer:
                 romanize_hindi=(cfg.get("hindi_script", "devanagari") == "latin"))
         elif text:
             text = text[0].upper() + text[1:]
+        if cfg.get("spoken_emoji", True):
+            text = emojimod.spoken(text)
         text = text.strip()
         if cfg.get("trailing_space", True) and text:
             text += " "
