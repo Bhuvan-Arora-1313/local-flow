@@ -88,10 +88,14 @@ class _WhisperBackend:
         self.romanize_hindi = romanize_hindi
 
     def transcribe(self, audio: np.ndarray, prompt: str = "") -> str:
+        # Keep Whisper's prompt SHORT. A long dictionary dump in initial_prompt
+        # makes it garble Hindi (stray commas, half-romanised words) and can
+        # tip it into repetition loops. The dictionary is still applied by
+        # the corrections + cleanup steps after transcription.
         if self.romanize_hindi:
-            prompt = f"{self.HINGLISH_PRIMER} {prompt}".strip() if prompt else self.HINGLISH_PRIMER
-        if prompt and len(prompt) > 800:            # Whisper prompt is ~224 tokens
-            prompt = prompt[:800].rsplit(",", 1)[0]
+            prompt = self.HINGLISH_PRIMER      # tested: primer alone beats primer + terms
+        elif prompt and len(prompt) > 200:
+            prompt = prompt[:200].rsplit(",", 1)[0]
         lang = None if self.language in ("auto", "", "detect") else self.language
         out = self._mw.transcribe(
             audio,
