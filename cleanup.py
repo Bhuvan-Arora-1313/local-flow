@@ -6,6 +6,8 @@ import re
 import json
 import requests
 
+import hinglish
+
 SYSTEM_PROMPT = """You edit raw dictation (RAW_TRANSCRIPT) into clean written text. A GLOSSARY of the \
 speaker's terms is provided. You MUST actively edit - do not echo the input back.
 
@@ -228,6 +230,15 @@ class Cleaner:
         if not raw:
             return raw
         to = _timeout or self.timeout
+
+        # Hindi/Hinglish: no LLM. Asked to transliterate, the cleanup model
+        # also rewrote -- reordered words, "सकता" -> "saka", translated
+        # clauses to English ("ab kaafi kuch kar sakta hoon" -> "Abe Kaufman
+        # can do something"), or left the line in Devanagari. Whisper's own
+        # output is already punctuated; a fixed transliteration can only
+        # spell what it heard.
+        if romanize_hindi and (hinglish.has_devanagari(raw) or hinglish.looks_hinglish(raw)):
+            return hinglish.tidy(hinglish.romanize(raw))
 
         # Hindi -> Roman: if the ASR still emitted Devanagari (normally it
         # shouldn't once primed to output romanised Hinglish directly -- see

@@ -97,6 +97,8 @@ class _WhisperBackend:
         elif prompt and len(prompt) > 200:
             prompt = prompt[:200].rsplit(",", 1)[0]
         lang = None if self.language in ("auto", "", "detect") else self.language
+        if lang is None:
+            self._install_hindi_bias()
         out = self._mw.transcribe(
             audio,
             path_or_hf_repo=self.model_id,
@@ -106,6 +108,46 @@ class _WhisperBackend:
             condition_on_previous_text=False,
         )
         return out.get("text", "").strip()
+
+
+    # Whisper picks ONE language per utterance by plain majority. Hinglish
+    # that starts in English ("this is better and ab main kaafi kuch kar
+    # sakta hoon") then gets decoded as English and the Hindi part comes out
+    # as nonsense ("abe kaufi kuch kar saktatau"). Pure English scores Hindi
+    # at ~0.000 (measured on the bench clips) and Hindi at ~0.96, so any
+    # real Hindi share is a clear signal: decode it as Hindi, which keeps the
+    # English words in Latin script anyway. Urdu counts as Hindi -- spoken
+    # they're the same, and decoding as "ur" would output Arabic script.
+    HINDI_SHARE = 0.10
+
+    def _install_hindi_bias(self):
+        """Applies HINDI_SHARE inside Whisper's own language detection (which
+        transcribe() runs anyway), so it costs no extra model pass."""
+        try:
+            import mlx.core as mx
+            from mlx_whisper.transcribe import ModelHolder
+            model = ModelHolder.get_model(self.model_id, mx.float16)
+        except Exception as e:
+            print(f"[asr] couldn't set up Hindi detection ({e})")
+            return
+        if getattr(model, "_lf_hindi_bias", False):
+            return
+        orig = model.detect_language
+        share = self.HINDI_SHARE
+
+        def detect_language(mel, tokenizer=None):
+            tokens, probs = orig(mel, tokenizer)
+            if isinstance(probs, dict):
+                hindi = probs.get("hi", 0.0) + probs.get("ur", 0.0)
+                if hindi >= 0.01:
+                    print(f"[asr] hindi share {hindi:.2f}, english {probs.get('en', 0.0):.2f}"
+                          f" -> {'hi' if hindi >= share else max(probs, key=probs.get)}")
+                if hindi >= share:
+                    probs = dict(probs, hi=1.0)
+            return tokens, probs
+
+        model.detect_language = detect_language
+        model._lf_hindi_bias = True
 
 
 class Transcriber:
