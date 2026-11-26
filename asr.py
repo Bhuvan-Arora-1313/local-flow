@@ -97,7 +97,16 @@ class _WhisperBackend:
         elif prompt and len(prompt) > 200:
             prompt = prompt[:200].rsplit(",", 1)[0]
         lang = None if self.language in ("auto", "", "detect") else self.language
-        if lang is None:
+        if lang is None and self.romanize_hindi:
+            # Hinglish speaker: always decode as Hindi. Whisper's language
+            # guess was useless on real Hinglish (a mostly-Hindi sentence
+            # scored 1-3% Hindi, "thumbs up emoji" 51%), and decoding Hindi
+            # speech as English TRANSLATES it ("mazaak" -> "mzak or that is
+            # more realistic"). Primed with romanised Hinglish, Hindi mode
+            # keeps English words in English -- tested word-for-word on the
+            # English bench clips -- and skips the detection pass (~0.4s).
+            lang = "hi"
+        elif lang is None:
             self._install_hindi_bias()
         out = self._mw.transcribe(
             audio,

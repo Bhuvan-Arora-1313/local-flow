@@ -21,7 +21,7 @@ def norm(s: str) -> str:
 
 
 _PHON_RULES = [
-    (r"qu", "kw"), (r"q", "k"), (r"ck", "k"), (r"ph", "f"), (r"c(?=[eiy])", "s"), (r"c", "k"),
+    (r"qu", "kw"), (r"q", "k"), (r"(?<![a-z])ku(?=[aeiou])", "kw"), (r"ck", "k"), (r"ph", "f"), (r"c(?=[eiy])", "s"), (r"c", "k"),
     (r"x", "ks"), (r"z", "s"), (r"([bdgjkt])h", r"\1"), (r"w(?=[^aeiou]|$)", ""), (r"w", "v"),
     (r"ee", "i"), (r"oo", "u"), (r"y$", "i"), (r"(.)\1+", r"\1"),
 ]

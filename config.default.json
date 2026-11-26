@@ -51,5 +51,7 @@
   "auto_emoji": false,
   "auto_emoji_note": "Adds 1-2 fitting emojis, only when dictating into a chat app (WhatsApp, Messages, Slack, Telegram, Discord, or a browser tab titled like one). Kept only if no word changed. Uses the cleanup model (~0.5-1s extra).",
   "screen_context": true,
-  "screen_context_note": "While you talk, reads names/terms near where you're typing (focused window text; in terminals also the recent Claude Code conversation) and gives them to the cleanup step as spelling hints. Local only, kept in memory for one dictation."
+  "screen_context_note": "While you talk, reads names/terms near where you're typing (focused window text; in terminals also the recent Claude Code conversation) and gives them to the cleanup step as spelling hints. Local only, kept in memory for one dictation.",
+  "keep_recent_audio": 5,
+  "keep_recent_audio_note": "How many of your latest recordings to keep in recent_audio/ (local only; oldest deleted) so a bad transcription can be checked against what you said. 0 = keep none."
 }

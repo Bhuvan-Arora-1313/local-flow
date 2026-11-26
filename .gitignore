@@ -19,3 +19,6 @@ stats.json
 
 # converted speech models (large binaries)
 models/
+
+# your last few dictation recordings (local only)
+recent_audio/

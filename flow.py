@@ -582,12 +582,34 @@ class App:
         audio = self.rec.stop()
         dur = len(audio) / max(1, self.rec.sample_rate)
         print(f"[flow] recording stopped ({dur:.1f}s)")
+        if CFG.get("keep_recent_audio", 5) and dur >= 0.5:
+            threading.Thread(target=self._keep_audio, args=(audio,), daemon=True).start()
         if dur < CFG.get("min_record_seconds", 0.35):
             self.state = "idle"
             return
         self._work_job_id += 1
         self._work_started_at = time.time()
         self._jobs.put((self._work_job_id, audio))
+
+    def _keep_audio(self, audio):
+        """Last few recordings, local only (recent_audio/, oldest deleted),
+        so a bad transcription can be checked against what was really said."""
+        try:
+            import wave
+            d = os.path.join(BASE, "recent_audio")
+            os.makedirs(d, exist_ok=True)
+            path = os.path.join(d, time.strftime("%Y%m%d-%H%M%S") + ".wav")
+            pcm = (np.clip(audio, -1.0, 1.0) * 32767).astype(np.int16).tobytes()
+            with wave.open(path, "wb") as w:
+                w.setnchannels(1)
+                w.setsampwidth(2)
+                w.setframerate(int(self.rec.sample_rate))
+                w.writeframes(pcm)
+            keep = int(CFG.get("keep_recent_audio", 5))
+            for old in sorted(os.listdir(d))[:-keep]:
+                os.remove(os.path.join(d, old))
+        except Exception as e:
+            print(f"[flow] couldn't keep recent audio: {e}")
 
     # ---------- pipeline worker ----------
     def _worker(self):
