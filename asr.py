@@ -7,8 +7,25 @@ Two backends, chosen by the model id:
                     accepts an `initial_prompt` (the jargon glossary) and a
                     `language` ("auto" = detect, "en", "hi", …).
 """
+import re
 import time
 import numpy as np
+
+# a word or short phrase repeated 4+ times in a row ("naapt naapt naapt
+# naapt", "kisiti hai kisiti hai ...") -- Whisper stuck in a loop
+_LOOP = re.compile(r"(?:^|(?<=\s))((?:\S+\s+){0,3}?\S+)(?:\s+\1){3,}(?=\s|$)")
+
+
+def _degenerate(out) -> bool:
+    """Whisper got stuck repeating itself / emitted junk bytes."""
+    text = out.get("text", "")
+    if "�" in text or _LOOP.search(text):
+        return True
+    return any(s.get("compression_ratio", 0) > 2.4 for s in out.get("segments") or [])
+
+
+def _unloop(text: str) -> str:
+    return re.sub(r"\s{2,}", " ", _LOOP.sub(r"\1", text).replace("�", "")).strip()
 
 
 class _ParakeetBackend:
@@ -108,7 +125,47 @@ class _WhisperBackend:
             lang = "hi"
         elif lang is None:
             self._install_hindi_bias()
-        out = self._mw.transcribe(
+        out = self._decode(audio, lang, prompt)
+        text = out.get("text", "").strip()
+        if lang != "en" and _degenerate(out):
+            # Decoding English speech as Hindi can tip Whisper into a loop
+            # ("naapt naapt naapt ...", then Devanagari junk -- a 75 s
+            # all-English dictation: window 1 fine, window 2 garbage). Ask
+            # Whisper's language detector, per 30 s window, whether there's
+            # any Hindi at all: English scores < 0.0001, Hinglish 0.01+.
+            share = self._hindi_share(audio)
+            print(f"[asr] {lang or 'auto'} decode looped (hindi share {share:.4f})")
+            if share < self.ENGLISH_ONLY_BELOW:
+                retry = self._decode(audio, "en", "")
+                if not _degenerate(retry):
+                    print("[asr] re-decoded as English")
+                    return retry.get("text", "").strip()
+            text = _unloop(text)
+        return text
+
+    ENGLISH_ONLY_BELOW = 0.002
+
+    def _hindi_share(self, audio) -> float:
+        """Highest Hindi(+Urdu) probability over the recording's 30 s windows
+        (an encoder pass each, ~0.1-0.4 s total; only run after a loop)."""
+        try:
+            import mlx.core as mx
+            from mlx_whisper.transcribe import ModelHolder
+            from mlx_whisper.audio import log_mel_spectrogram, pad_or_trim, N_FRAMES, N_SAMPLES
+            model = ModelHolder.get_model(self.model_id, mx.float16)
+            mel = log_mel_spectrogram(audio, n_mels=model.dims.n_mels, padding=N_SAMPLES)
+            best = 0.0
+            for s in range(0, max(mel.shape[-2] - N_FRAMES, 1), N_FRAMES):
+                seg = pad_or_trim(mel[s:], N_FRAMES, axis=-2).astype(mx.float16)
+                _, p = model.detect_language(seg)
+                best = max(best, p.get("hi", 0.0) + p.get("ur", 0.0))
+            return best
+        except Exception as e:
+            print(f"[asr] couldn't check the language ({e})")
+            return 1.0          # unknown: keep the Hindi decode
+
+    def _decode(self, audio, lang, prompt):
+        return self._mw.transcribe(
             audio,
             path_or_hf_repo=self.model_id,
             language=lang,
@@ -116,7 +173,6 @@ class _WhisperBackend:
             fp16=True,
             condition_on_previous_text=False,
         )
-        return out.get("text", "").strip()
 
 
     # Whisper picks ONE language per utterance by plain majority. Hinglish
