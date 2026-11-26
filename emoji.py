@@ -44,13 +44,42 @@ _NAMED = {
     "smirk": "😏", "zipper mouth": "🤐", "devil": "😈", "angel": "😇",
     "crossed fingers": "🤞", "fingers crossed": "🤞", "raised hands": "🙌",
     "high five": "🙌", "point up": "☝️", "point down": "👇", "point right": "👉",
+    "snail": "🐌", "turtle": "🐢", "rabbit": "🐰", "monkey face": "🐵", "lion": "🦁",
+    "tiger": "🐯", "panda": "🐼", "unicorn": "🦄", "horse": "🐴", "cow": "🐮", "pig": "🐷",
+    "chicken": "🐔", "bird": "🐦", "fish": "🐟", "snake": "🐍", "butterfly": "🦋",
+    "clown": "🤡", "robot": "🤖", "alien": "👽", "ghost": "👻", "zombie": "🧟",
+    "cold": "🥶", "hot": "🥵", "hungry": "🤤", "drooling": "🤤", "yum": "😋", "yummy": "😋",
+    "tongue": "😛", "silly": "🤪", "crazy": "🤪", "quiet": "🤫", "shush": "🤫",
+    "lying": "🤥", "money face": "🤑", "cowboy": "🤠", "disguise": "🥸", "partying": "🥳",
+    "confused": "😕", "worried": "😟", "tired": "😫", "weary": "😩", "relieved": "😌",
+    "grimace": "😬", "awkward": "😬", "pensive": "😔", "disappointed": "😞",
+    "flushed": "😳", "embarrassed": "😳", "joy": "😂", "zany": "🤪", "vomit": "🤮",
+    "mask": "😷", "nauseated": "🤢", "sneeze": "🤧", "hourglass": "⏳", "clock": "⏰",
+    "alarm": "⏰", "calendar": "📅", "pin": "📌", "link": "🔗", "lock": "🔒", "key": "🔑",
+    "book": "📖", "pen": "🖊️", "memo": "📝", "note": "📝", "chart": "📈", "graph": "📈",
+    "mail": "📧", "email": "📧", "bell": "🔔", "music": "🎵", "movie": "🎬", "camera": "📷",
+    "game": "🎮", "car": "🚗", "plane": "✈️", "train": "🚆", "house": "🏠", "home": "🏠",
+    "earth": "🌍", "world": "🌍", "rainbow": "🌈", "snow": "❄️", "lightning": "⚡",
+    "zap": "⚡", "boom": "💥", "bomb": "💣", "gem": "💎", "diamond": "💎", "crown": "👑",
+    "ring": "💍", "balloon": "🎈", "ice cream": "🍦", "burger": "🍔", "fries": "🍟",
+    "popcorn": "🍿", "apple": "🍎", "banana": "🍌", "mango": "🥭", "watermelon": "🍉",
+    "wine": "🍷", "soccer": "⚽", "football": "⚽", "cricket": "🏏", "basketball": "🏀",
+    "running": "🏃", "dance": "💃", "dancing": "💃", "sweat": "💦", "drop": "💧",
+    "plant": "🌱", "tree": "🌳", "leaf": "🍃", "mushroom": "🍄", "india": "🇮🇳",
+    "indian flag": "🇮🇳", "white heart": "🤍", "black heart": "🖤", "blue heart": "💙",
+    "green heart": "💚", "yellow heart": "💛", "purple heart": "💜", "orange heart": "🧡",
+    "sparkling heart": "💖", "two hearts": "💕", "question": "❓", "exclamation": "❗",
+    "sos": "🆘", "new": "🆕", "free": "🆓", "cool button": "🆒", "speech bubble": "💬",
+    "zzz": "💤", "nail polish": "💅", "sassy": "💅", "eye": "👁️", "brain": "🧠",
+    "heart hands": "🫶", "handshake": "🤝", "writing": "✍️", "call me": "🤙",
+    "rock on": "🤘", "peace": "✌️", "victory": "✌️", "middle finger": "🖕",
 }
 _NAMES = sorted(_NAMED, key=len, reverse=True)
 # "emoji" as Whisper may spell it, incl. romanised from Devanagari (इमोजी -> imoji)
 _EMOJI_WORD = r"(?:emoji|emojis|emojee|imoji|imojee|emoticon)"
 _SPOKEN = re.compile(
     r"(?:\b(?:an?|the)\s+)?\b(" + "|".join(re.escape(n) for n in _NAMES) + r")[\s-]+" + _EMOJI_WORD + r"\b"
-    r"[.,!]?",
+    r"\.?",
     re.IGNORECASE)
 
 # every emoji-ish code point we may insert or the model may produce
@@ -88,16 +117,18 @@ Only insert emojis. If no emoji fits, return the message unchanged.
 Return ONLY the message."""
 
 
-def auto(text: str, url: str, model: str, timeout: float = 8.0) -> str:
-    """Suggest emojis via the local model; keep them only if nothing else changed."""
+def auto(text: str, url: str, model: str, keep_alive="30m", timeout: float = 8.0) -> str:
+    """Suggest emojis via the local model; keep them only if nothing else changed.
+    num_ctx and keep_alive MUST match the cleanup call's: Ollama reloads the
+    model whenever num_ctx changes, and keep_alive resets its unload timer."""
     body = text.strip()
     if not body or _EMOJI_CHARS.search(body):    # already has emojis (spoken ones)
         return text
     try:
         r = requests.post(f"{url}/api/generate", json={
             "model": model, "system": AUTO_PROMPT, "prompt": body + "\n\n/no_think",
-            "stream": False, "think": False, "keep_alive": "30m",
-            "options": {"temperature": 0.3, "num_ctx": 2048},
+            "stream": False, "think": False, "keep_alive": keep_alive,
+            "options": {"temperature": 0.3, "num_ctx": 8192},
         }, timeout=timeout)
         r.raise_for_status()
         out = r.json().get("response", "")

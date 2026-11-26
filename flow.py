@@ -592,7 +592,8 @@ class App:
                     text = emojimod.spoken(text)
                 if (CFG.get("auto_emoji", False) and text
                         and emojimod.is_chat(getattr(self, "_target", None))):
-                    text = emojimod.auto(text, CFG["ollama_url"], CFG["ollama_model"])
+                    text = emojimod.auto(text, CFG["ollama_url"], CFG["ollama_model"],
+                                         keep_alive=self.cleaner.keep_alive)
                 t2 = time.time()
                 text = text.strip()
                 if CFG.get("trailing_space", True) and text:
